@@ -137,7 +137,7 @@
     const defaultRules = () => ({
       wl: '', wlTitle: true, wlDesc: true, wlLink: false,
       bl: '', blTitle: true, blDesc: true, blLink: false,
-      hideNoDesc: true, hideNoDates: true, hideNoSecure: false,
+      hideNoDesc: false, hideNoDates: true, hideNoSecure: false,
       hideDupTitles: true, hideDupDesc: true, hideSimilar: true,
       cleanTitle: true, maxAgeHours: 48
     });
@@ -302,6 +302,24 @@
       loadCurrentView();
     }
 
+    async function fetchRawXml(url) {
+      // Primary proxy: AllOrigins
+      try {
+        const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
+        const data = await res.json();
+        if (data && data.contents) return data.contents;
+      } catch (e) {}
+
+      // Secondary proxy fallback: CorsProxy.io
+      try {
+        const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`);
+        const xmlText = await res.text();
+        if (xmlText) return xmlText;
+      } catch (e) {}
+
+      return null;
+    }
+
     async function fetchRawFeedArticles(query) {
       const isUrl = query.startsWith('http://') || query.startsWith('https://');
       const sourceUrls = isUrl ? [query] : [
@@ -312,31 +330,36 @@
 
       const promises = sourceUrls.map(async (url) => {
         try {
-          const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-          const res = await fetch(proxyUrl);
-          const data = await res.json();
-          if (!data.contents) return [];
+          const rawXml = await fetchRawXml(url);
+          if (!rawXml) return [];
 
           const parser = new DOMParser();
-          const xmlDoc = parser.parseFromString(data.contents, "text/xml");
+          const xmlDoc = parser.parseFromString(rawXml, "text/xml");
           const items = Array.from(xmlDoc.querySelectorAll("item"));
 
           return items.map(item => {
-            const rawLink = item.querySelector("link")?.textContent || item.querySelector("guid")?.textContent || '';
+            // Raw feed link
+            let rawLink = item.querySelector("link")?.textContent || item.querySelector("guid")?.textContent || '';
+            if (!rawLink && item.querySelector("link")?.nextSibling) {
+              rawLink = item.querySelector("link").nextSibling.nodeValue || '';
+            }
+            rawLink = rawLink.trim();
+
             const sourceElem = item.querySelector("source");
-            
-            // Extract original source URL and publisher name if provided in RSS metadata
             const sourceUrl = sourceElem?.getAttribute("url") || '';
             const sourceName = sourceElem?.textContent?.trim() || '';
 
-            // Use original direct URL if available, otherwise fall back to raw feed link
-            const finalLink = (sourceUrl && sourceUrl.startsWith('http')) ? sourceUrl : rawLink;
+            // Use publisher URL if valid, otherwise fallback safely to RSS item link
+            let finalLink = (sourceUrl && sourceUrl.startsWith('http')) ? sourceUrl : rawLink;
+
+            // Clean descriptions and remove embedded tags
+            let desc = item.querySelector("description")?.textContent || '';
 
             return {
               title: item.querySelector("title")?.textContent || '',
               link: finalLink,
               sourceName: sourceName,
-              description: item.querySelector("description")?.textContent || '',
+              description: desc,
               pubDate: item.querySelector("pubDate")?.textContent || ''
             };
           });
@@ -367,7 +390,7 @@
 
         if (rules.hideNoDesc && !desc) return false;
         if (rules.hideNoDates && (!item.pubDate || isNaN(new Date(item.pubDate).getTime()))) return false;
-        if (rules.hideNoSecure && !link.startsWith('https://')) return false;
+        if (rules.hideNoSecure && link && !link.startsWith('https://')) return false;
 
         if (rules.maxAgeHours > 0 && item.pubDate) {
           const ageInHours = (new Date() - new Date(item.pubDate)) / (1000 * 60 * 60);
@@ -488,8 +511,12 @@
     }
 
     function getDomain(url) {
-      try { return new URL(url).hostname.replace('www.', ''); }
-      catch (e) { return 'news-source'; }
+      try { 
+        if (!url) return 'news-source';
+        return new URL(url).hostname.replace('www.', ''); 
+      } catch (e) { 
+        return 'news-source'; 
+      }
     }
 
     function blockDomain(domain) {
