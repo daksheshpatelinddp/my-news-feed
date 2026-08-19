@@ -23,7 +23,7 @@
       <div class="bg-slate-800 p-3 rounded-lg border border-slate-700 space-y-2">
         <h2 class="text-xs font-bold text-green-400 uppercase tracking-wider">+ Create Feed / Bundle</h2>
         <select id="itemType" onchange="toggleFormMode()" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white">
-          <option value="feed">Single Keyword Feed (Multi-Engine)</option>
+          <option value="feed">Single Keyword Feed (Multi-Source)</option>
           <option value="bundle">Feed Bundle (Group Feeds)</option>
         </select>
         <input id="itemName" type="text" placeholder="Name (e.g., Infosys or Portfolio)" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white">
@@ -73,11 +73,11 @@
         <div>
           <label class="text-[11px] font-semibold text-slate-300 mb-1 block">Auto-Hide Conditions</label>
           <div class="grid grid-cols-2 gap-1 text-[11px] text-slate-300">
-            <label><input type="checkbox" id="hideNoDesc"> No description</label>
+            <label><input type="checkbox" id="hideNoDesc" checked> No description</label>
             <label><input type="checkbox" id="hideNoDates" checked> No dates</label>
             <label><input type="checkbox" id="hideNoSecure"> No secure links</label>
             <label><input type="checkbox" id="hideDupTitles" checked> Duplicate titles</label>
-            <label><input type="checkbox" id="hideDupDesc"> Duplicate desc</label>
+            <label><input type="checkbox" id="hideDupDesc" checked> Duplicate desc</label>
             <label><input type="checkbox" id="hideSimilar" checked> Hide similar titles</label>
           </div>
         </div>
@@ -91,7 +91,7 @@
 
           <div class="flex items-center gap-2 text-[11px]">
             <span class="text-slate-300">Auto-hide older than:</span>
-            <input id="maxAgeHours" type="number" value="72" class="w-12 bg-slate-900 border border-slate-700 p-1 rounded text-white text-center">
+            <input id="maxAgeHours" type="number" value="48" class="w-12 bg-slate-900 border border-slate-700 p-1 rounded text-white text-center">
             <span class="text-slate-400">Hours</span>
           </div>
         </div>
@@ -137,9 +137,9 @@
     const defaultRules = () => ({
       wl: '', wlTitle: true, wlDesc: true, wlLink: false,
       bl: '', blTitle: true, blDesc: true, blLink: false,
-      hideNoDesc: false, hideNoDates: true, hideNoSecure: false,
-      hideDupTitles: true, hideDupDesc: false, hideSimilar: true,
-      cleanTitle: true, maxAgeHours: 72
+      hideNoDesc: true, hideNoDates: true, hideNoSecure: false,
+      hideDupTitles: true, hideDupDesc: true, hideSimilar: true,
+      cleanTitle: true, maxAgeHours: 48
     });
 
     let feeds = JSON.parse(localStorage.getItem('mp_feeds_v2')) || [
@@ -152,7 +152,7 @@
     let blockedDomains = JSON.parse(localStorage.getItem('mp_blocked_domains')) || [];
     let pinnedArticles = JSON.parse(localStorage.getItem('mp_pinned')) || [];
     
-    let activeSelection = { type: 'feed', id: 'f1' };
+    let activeSelection = { type: 'feed', id: 'f1' }; // type: 'feed' | 'bundle'
 
     function saveState() {
       localStorage.setItem('mp_feeds_v2', JSON.stringify(feeds));
@@ -302,79 +302,22 @@
       loadCurrentView();
     }
 
-    // Multi-proxy fetching strategy with sequential fallback for Google/Yahoo/Bing
-    async function fetchSingleRssFeed(url, engineLabel) {
-      // Strategy 1: Feed2Json Service
-      try {
-        const res = await fetch(`https://feed2json.org/convert?url=${encodeURIComponent(url)}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.items && data.items.length > 0) {
-            return data.items.map(item => ({
-              title: item.title || '',
-              link: item.url || item.external_url || '',
-              description: item.summary || item.content_html || '',
-              pubDate: item.date_published || '',
-              engine: engineLabel
-            }));
-          }
-        }
-      } catch (e) {}
-
-      // Strategy 2: RSS2JSON API
-      try {
-        const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}&count=50`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.status === 'ok' && data.items && data.items.length > 0) {
-            return data.items.map(item => ({
-              title: item.title || '',
-              link: item.link || item.guid || '',
-              description: item.description || item.content || '',
-              pubDate: item.pubDate || '',
-              engine: engineLabel
-            }));
-          }
-        }
-      } catch (e) {}
-
-      // Strategy 3: Direct XML parsing via CorsProxy
-      try {
-        const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`);
-        if (res.ok) {
-          const xmlText = await res.text();
-          const parser = new DOMParser();
-          const xmlDoc = parser.parseFromString(xmlText, "text/xml");
-          const items = Array.from(xmlDoc.querySelectorAll("item"));
-          if (items.length > 0) {
-            return items.map(item => ({
-              title: item.querySelector("title")?.textContent || '',
-              link: item.querySelector("link")?.textContent || item.querySelector("guid")?.textContent || '',
-              description: item.querySelector("description")?.textContent || '',
-              pubDate: item.querySelector("pubDate")?.textContent || '',
-              engine: engineLabel
-            }));
-          }
-        }
-      } catch (e) {}
-
-      return [];
-    }
-
     async function fetchRawFeedArticles(query) {
       const isUrl = query.startsWith('http://') || query.startsWith('https://');
-      
-      if (isUrl) {
-        return await fetchSingleRssFeed(query, 'Custom RSS');
-      }
-
-      const sources = [
-        { name: 'Google News', url: `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-IN&gl=IN&ceid=IN:en` },
-        { name: 'Yahoo News', url: `https://news.search.yahoo.com/rss?p=${encodeURIComponent(query)}` },
-        { name: 'Bing News', url: `https://www.bing.com/news/search?q=${encodeURIComponent(query)}&format=RSS` }
+      const sourceUrls = isUrl ? [query] : [
+        `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-IN&gl=IN&ceid=IN:en`,
+        `https://www.bing.com/news/search?q=${encodeURIComponent(query)}&format=RSS`,
+        `https://news.search.yahoo.com/rss?p=${encodeURIComponent(query)}`
       ];
 
-      const promises = sources.map(src => fetchSingleRssFeed(src.url, src.name));
+      const promises = sourceUrls.map(async (url) => {
+        try {
+          const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}`);
+          const data = await res.json();
+          return data.status === 'ok' ? data.items : [];
+        } catch (e) { return []; }
+      });
+
       const results = await Promise.all(promises);
       return results.flat();
     }
@@ -399,7 +342,7 @@
 
         if (rules.hideNoDesc && !desc) return false;
         if (rules.hideNoDates && (!item.pubDate || isNaN(new Date(item.pubDate).getTime()))) return false;
-        if (rules.hideNoSecure && link && !link.startsWith('https://')) return false;
+        if (rules.hideNoSecure && !link.startsWith('https://')) return false;
 
         if (rules.maxAgeHours > 0 && item.pubDate) {
           const ageInHours = (new Date() - new Date(item.pubDate)) / (1000 * 60 * 60);
@@ -451,7 +394,7 @@
       const obj = getActiveObject();
       if (!obj) return clearDisplay();
 
-      container.innerHTML = '<p class="text-slate-400">Fetching articles from Google, Yahoo, and Bing via redundant proxies...</p>';
+      container.innerHTML = '<p class="text-slate-400">Loading articles from engines...</p>';
 
       let finalArticles = [];
 
@@ -470,13 +413,13 @@
           const feedObj = feeds.find(f => f.id === fId);
           if (!feedObj) return [];
           const raw = await fetchRawFeedArticles(feedObj.query);
-          return applyFilterRules(raw, feedObj.rules);
+          return applyFilterRules(raw, feedObj.rules); // Layer 1: Feed Rules
         });
 
         const nestedArticles = await Promise.all(feedPromises);
         const mergedFeedArticles = nestedArticles.flat();
         
-        finalArticles = applyFilterRules(mergedFeedArticles, obj.rules);
+        finalArticles = applyFilterRules(mergedFeedArticles, obj.rules); // Layer 2: Bundle Rules
       }
 
       finalArticles.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
@@ -506,11 +449,7 @@
               </h3>
               ${isPinned ? '<span class="text-xs text-yellow-400">📌 Pinned</span>' : ''}
             </div>
-            <p class="text-xs text-slate-400 mb-2">
-              🌐 Engine: <b class="text-blue-400">${item.engine || 'RSS'}</b> • 
-              📰 Source Domain: <b class="text-slate-200">${domain}</b> • 
-              Published: ${item.pubDate ? new Date(item.pubDate).toLocaleString() : 'N/A'}
-            </p>
+            <p class="text-xs text-slate-400 mb-2">${domain} • Published: ${new Date(item.pubDate).toLocaleString()}</p>
             <p class="text-sm text-slate-300 line-clamp-2 mb-3">${(item.description || '').replace(/<[^>]*>?/gm, '')}</p>
             
             <div class="flex gap-2 pt-2 border-t border-slate-700/60 text-xs">
@@ -523,12 +462,8 @@
     }
 
     function getDomain(url) {
-      try { 
-        if (!url) return 'news-source';
-        return new URL(url).hostname.replace('www.', ''); 
-      } catch (e) { 
-        return 'news-source'; 
-      }
+      try { return new URL(url).hostname.replace('www.', ''); }
+      catch (e) { return 'news-source'; }
     }
 
     function blockDomain(domain) {
