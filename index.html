@@ -152,7 +152,7 @@
     let blockedDomains = JSON.parse(localStorage.getItem('mp_blocked_domains')) || [];
     let pinnedArticles = JSON.parse(localStorage.getItem('mp_pinned')) || [];
     
-    let activeSelection = { type: 'feed', id: 'f1' }; // type: 'feed' | 'bundle'
+    let activeSelection = { type: 'feed', id: 'f1' };
 
     function saveState() {
       localStorage.setItem('mp_feeds_v2', JSON.stringify(feeds));
@@ -312,9 +312,34 @@
 
       const promises = sourceUrls.map(async (url) => {
         try {
-          const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}`);
+          const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+          const res = await fetch(proxyUrl);
           const data = await res.json();
-          return data.status === 'ok' ? data.items : [];
+          if (!data.contents) return [];
+
+          const parser = new DOMParser();
+          const xmlDoc = parser.parseFromString(data.contents, "text/xml");
+          const items = Array.from(xmlDoc.querySelectorAll("item"));
+
+          return items.map(item => {
+            const rawLink = item.querySelector("link")?.textContent || item.querySelector("guid")?.textContent || '';
+            const sourceElem = item.querySelector("source");
+            
+            // Extract original source URL and publisher name if provided in RSS metadata
+            const sourceUrl = sourceElem?.getAttribute("url") || '';
+            const sourceName = sourceElem?.textContent?.trim() || '';
+
+            // Use original direct URL if available, otherwise fall back to raw feed link
+            const finalLink = (sourceUrl && sourceUrl.startsWith('http')) ? sourceUrl : rawLink;
+
+            return {
+              title: item.querySelector("title")?.textContent || '',
+              link: finalLink,
+              sourceName: sourceName,
+              description: item.querySelector("description")?.textContent || '',
+              pubDate: item.querySelector("pubDate")?.textContent || ''
+            };
+          });
         } catch (e) { return []; }
       });
 
@@ -413,13 +438,13 @@
           const feedObj = feeds.find(f => f.id === fId);
           if (!feedObj) return [];
           const raw = await fetchRawFeedArticles(feedObj.query);
-          return applyFilterRules(raw, feedObj.rules); // Layer 1: Feed Rules
+          return applyFilterRules(raw, feedObj.rules);
         });
 
         const nestedArticles = await Promise.all(feedPromises);
         const mergedFeedArticles = nestedArticles.flat();
         
-        finalArticles = applyFilterRules(mergedFeedArticles, obj.rules); // Layer 2: Bundle Rules
+        finalArticles = applyFilterRules(mergedFeedArticles, obj.rules);
       }
 
       finalArticles.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
@@ -439,6 +464,7 @@
         }
 
         const domain = getDomain(item.link);
+        const sourceLabel = item.sourceName ? `${item.sourceName} (${domain})` : domain;
         const isPinned = pinnedArticles.includes(item.link);
 
         return `
@@ -449,7 +475,7 @@
               </h3>
               ${isPinned ? '<span class="text-xs text-yellow-400">📌 Pinned</span>' : ''}
             </div>
-            <p class="text-xs text-slate-400 mb-2">${domain} • Published: ${new Date(item.pubDate).toLocaleString()}</p>
+            <p class="text-xs text-slate-400 mb-2">📰 Source: <b class="text-slate-200">${sourceLabel}</b> • Published: ${new Date(item.pubDate).toLocaleString()}</p>
             <p class="text-sm text-slate-300 line-clamp-2 mb-3">${(item.description || '').replace(/<[^>]*>?/gm, '')}</p>
             
             <div class="flex gap-2 pt-2 border-t border-slate-700/60 text-xs">
