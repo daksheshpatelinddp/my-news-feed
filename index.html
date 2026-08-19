@@ -11,7 +11,7 @@
     <h1 class="text-xl font-bold text-blue-400">⚡ MarketFeed Pro</h1>
     <div class="flex gap-2">
       <button onclick="saveToCloud()" class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded text-xs font-semibold">☁️ Cloud Save</button>
-      <button onclick="refreshActiveFeed()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-xs font-semibold">🔄 Refresh</button>
+      <button onclick="loadCurrentView()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-xs font-semibold">🔄 Refresh</button>
     </div>
   </header>
 
@@ -19,19 +19,33 @@
     <!-- Sidebar -->
     <aside class="w-full md:w-1/3 bg-slate-800/50 p-4 border-r border-slate-700 space-y-6">
       
-      <!-- Create Keyword Feed -->
-      <div>
-        <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">+ Create Unified Keyword Feed</h2>
-        <div class="space-y-2">
-          <input id="feedName" type="text" placeholder="Feed Name (e.g., Infosys)" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white">
-          <input id="feedQuery" type="text" placeholder="Search Keywords or RSS URL" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white">
-          <button onclick="addFeed()" class="w-full bg-green-600 hover:bg-green-500 text-white py-1.5 rounded text-xs font-bold">+ Create Multi-Source Feed</button>
+      <!-- Create Feed or Bundle -->
+      <div class="bg-slate-800 p-3 rounded-lg border border-slate-700 space-y-2">
+        <h2 class="text-xs font-bold text-green-400 uppercase tracking-wider">+ Create Feed / Bundle</h2>
+        <select id="itemType" onchange="toggleFormMode()" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white">
+          <option value="feed">Single Keyword Feed (Multi-Source)</option>
+          <option value="bundle">Feed Bundle (Group Feeds)</option>
+        </select>
+        <input id="itemName" type="text" placeholder="Name (e.g., Infosys or Portfolio)" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white">
+        
+        <div id="queryContainer">
+          <input id="itemQuery" type="text" placeholder="Search Keywords or RSS URL" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white">
         </div>
+
+        <div id="bundleSelectContainer" class="hidden">
+          <p class="text-[10px] text-slate-400 mb-1">Select Feeds to include in this Bundle:</p>
+          <div id="bundleCheckboxes" class="max-h-24 overflow-y-auto space-y-1 bg-slate-900 p-2 rounded text-xs border border-slate-700"></div>
+        </div>
+
+        <button onclick="createItem()" class="w-full bg-green-600 hover:bg-green-500 text-white py-1.5 rounded text-xs font-bold">Save Feed / Bundle</button>
       </div>
 
-      <!-- Advanced Filter Rules (RSS.app Replica) -->
+      <!-- Advanced Filter Rules Editor -->
       <div class="bg-slate-800 p-3 rounded-lg border border-slate-700 space-y-3">
-        <h2 class="text-xs font-bold text-blue-400 uppercase tracking-wider">⚙️ Advanced Rules (RSS.app)</h2>
+        <div class="flex justify-between items-center">
+          <h2 class="text-xs font-bold text-blue-400 uppercase tracking-wider">⚙️ Active Filters</h2>
+          <span id="editingTargetLabel" class="text-[10px] text-slate-400 font-mono">None Selected</span>
+        </div>
         
         <!-- Whitelist -->
         <div>
@@ -82,7 +96,7 @@
           </div>
         </div>
 
-        <button onclick="applyRulesAndRender()" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-1 rounded text-xs font-bold">Apply Filter Rules</button>
+        <button onclick="saveActiveRules()" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-1 rounded text-xs font-bold">Apply Rules to Selection</button>
       </div>
 
       <!-- Cloud Config -->
@@ -93,10 +107,16 @@
         <button onclick="syncFromCloud()" class="w-full bg-slate-700 hover:bg-slate-600 text-white py-1 rounded text-xs">Load Cloud Config</button>
       </div>
 
-      <!-- Feed List -->
-      <div>
-        <h2 class="text-xs font-bold text-slate-400 uppercase mb-2">My Saved Feeds</h2>
-        <div id="feedList" class="space-y-1"></div>
+      <!-- Lists -->
+      <div class="space-y-4">
+        <div>
+          <h2 class="text-xs font-bold text-slate-400 uppercase mb-2">📰 My Saved Feeds</h2>
+          <div id="feedList" class="space-y-1"></div>
+        </div>
+        <div>
+          <h2 class="text-xs font-bold text-slate-400 uppercase mb-2">📦 My Saved Bundles</h2>
+          <div id="bundleList" class="space-y-1"></div>
+        </div>
       </div>
     </aside>
 
@@ -104,7 +124,7 @@
     <main class="flex-1 p-6">
       <div class="flex justify-between items-center mb-6">
         <div>
-          <h2 id="currentTitle" class="text-2xl font-bold">Select or Add a Feed</h2>
+          <h2 id="currentTitle" class="text-2xl font-bold">Select a Feed or Bundle</h2>
           <p id="currentMeta" class="text-xs text-slate-400 mt-1"></p>
         </div>
         <span id="articleCount" class="text-slate-400 text-sm">0 articles</span>
@@ -114,182 +134,248 @@
   </div>
 
   <script>
-    let feeds = JSON.parse(localStorage.getItem('mp_feeds')) || [
-      { name: 'Infosys', query: 'Infosys' },
-      { name: 'Reliance', query: 'Reliance' }
+    const defaultRules = () => ({
+      wl: '', wlTitle: true, wlDesc: true, wlLink: false,
+      bl: '', blTitle: true, blDesc: true, blLink: false,
+      hideNoDesc: true, hideNoDates: true, hideNoSecure: false,
+      hideDupTitles: true, hideDupDesc: true, hideSimilar: true,
+      cleanTitle: true, maxAgeHours: 48
+    });
+
+    let feeds = JSON.parse(localStorage.getItem('mp_feeds_v2')) || [
+      { id: 'f1', name: 'Infosys', query: 'Infosys', rules: defaultRules() },
+      { id: 'f2', name: 'TCS', query: 'TCS', rules: defaultRules() }
+    ];
+    let bundles = JSON.parse(localStorage.getItem('mp_bundles_v2')) || [
+      { id: 'b1', name: 'IT Portfolio', feedIds: ['f1', 'f2'], rules: defaultRules() }
     ];
     let blockedDomains = JSON.parse(localStorage.getItem('mp_blocked_domains')) || [];
     let pinnedArticles = JSON.parse(localStorage.getItem('mp_pinned')) || [];
-    let activeFeedIdx = 0;
-    let fetchedRawArticles = [];
+    
+    let activeSelection = { type: 'feed', id: 'f1' }; // type: 'feed' | 'bundle'
 
     function saveState() {
-      localStorage.setItem('mp_feeds', JSON.stringify(feeds));
+      localStorage.setItem('mp_feeds_v2', JSON.stringify(feeds));
+      localStorage.setItem('mp_bundles_v2', JSON.stringify(bundles));
       localStorage.setItem('mp_blocked_domains', JSON.stringify(blockedDomains));
       localStorage.setItem('mp_pinned', JSON.stringify(pinnedArticles));
       renderSidebar();
     }
 
+    function toggleFormMode() {
+      const mode = document.getElementById('itemType').value;
+      document.getElementById('queryContainer').classList.toggle('hidden', mode === 'bundle');
+      document.getElementById('bundleSelectContainer').classList.toggle('hidden', mode === 'feed');
+    }
+
     function renderSidebar() {
-      const list = document.getElementById('feedList');
-      list.innerHTML = '';
-      feeds.forEach((feed, idx) => {
-        const isSelected = activeFeedIdx === idx;
-        list.innerHTML += `
-          <div class="flex justify-between items-center p-2 rounded cursor-pointer ${isSelected ? 'bg-blue-600' : 'hover:bg-slate-700'}">
-            <span onclick="selectFeed(${idx})" class="font-medium text-xs">📰 ${feed.name}</span>
-            <button onclick="deleteFeed(${idx})" class="text-red-400 text-xs font-bold px-1">✕</button>
+      const fList = document.getElementById('feedList');
+      const bList = document.getElementById('bundleList');
+      const checkboxes = document.getElementById('bundleCheckboxes');
+      
+      fList.innerHTML = '';
+      bList.innerHTML = '';
+      checkboxes.innerHTML = '';
+
+      feeds.forEach(f => {
+        const isSelected = activeSelection.type === 'feed' && activeSelection.id === f.id;
+        fList.innerHTML += `
+          <div class="flex justify-between items-center p-2 rounded cursor-pointer ${isSelected ? 'bg-blue-600 text-white' : 'hover:bg-slate-700 text-slate-300'}">
+            <span onclick="selectItem('feed', '${f.id}')" class="font-medium text-xs">📰 ${f.name}</span>
+            <button onclick="deleteItem('feed', '${f.id}')" class="text-red-400 text-xs font-bold px-1">✕</button>
+          </div>`;
+
+        checkboxes.innerHTML += `
+          <label class="flex items-center gap-2">
+            <input type="checkbox" value="${f.id}" class="bundle-feed-check">
+            <span>${f.name}</span>
+          </label>`;
+      });
+
+      bundles.forEach(b => {
+        const isSelected = activeSelection.type === 'bundle' && activeSelection.id === b.id;
+        bList.innerHTML += `
+          <div class="flex justify-between items-center p-2 rounded cursor-pointer ${isSelected ? 'bg-indigo-600 text-white' : 'hover:bg-slate-700 text-slate-300'}">
+            <span onclick="selectItem('bundle', '${b.id}')" class="font-medium text-xs">📦 ${b.name} (${b.feedIds.length} feeds)</span>
+            <button onclick="deleteItem('bundle', '${b.id}')" class="text-red-400 text-xs font-bold px-1">✕</button>
           </div>`;
       });
     }
 
-    function addFeed() {
-      const name = document.getElementById('feedName').value.trim();
-      const query = document.getElementById('feedQuery').value.trim();
-      if (!name || !query) return alert('Enter a Feed Name and Search Keyword');
-      
-      feeds.push({ name, query });
-      saveState();
-      selectFeed(feeds.length - 1);
-    }
+    function createItem() {
+      const type = document.getElementById('itemType').value;
+      const name = document.getElementById('itemName').value.trim();
+      if (!name) return alert('Enter a name');
 
-    function deleteFeed(idx) {
-      feeds.splice(idx, 1);
-      if (activeFeedIdx >= feeds.length) activeFeedIdx = Math.max(0, feeds.length - 1);
-      saveState();
-      if (feeds.length > 0) loadActiveFeed(); else clearDisplay();
-    }
-
-    function selectFeed(idx) {
-      activeFeedIdx = idx;
-      renderSidebar();
-      loadActiveFeed();
-    }
-
-    // Auto-fetches from Google News, Bing News, and Yahoo News concurrently
-    async function loadActiveFeed() {
-      if (!feeds[activeFeedIdx]) return;
-      const feed = feeds[activeFeedIdx];
-      document.getElementById('currentTitle').innerText = `${feed.name} Stream`;
-      document.getElementById('currentMeta').innerText = `Aggregating: Google News + Bing News + Yahoo News for "${feed.query}"`;
-      
-      const container = document.getElementById('newsContainer');
-      container.innerHTML = '<p class="text-slate-400">Fetching unified news stream from all sources...</p>';
-
-      const isUrl = feed.query.startsWith('http://') || feed.query.startsWith('https://');
-      
-      let sourceUrls = [];
-      if (isUrl) {
-        sourceUrls = [feed.query];
+      const id = 'id_' + Date.now();
+      if (type === 'feed') {
+        const query = document.getElementById('itemQuery').value.trim();
+        if (!query) return alert('Enter search keyword or RSS URL');
+        feeds.push({ id, name, query, rules: defaultRules() });
       } else {
-        const q = encodeURIComponent(feed.query);
-        sourceUrls = [
-          `https://news.google.com/rss/search?q=${q}&hl=en-IN&gl=IN&ceid=IN:en`,
-          `https://www.bing.com/news/search?q=${q}&format=RSS`,
-          `https://news.search.yahoo.com/rss?p=${q}`
-        ];
+        const selectedFeedIds = Array.from(document.querySelectorAll('.bundle-feed-check:checked')).map(cb => cb.value);
+        if (!selectedFeedIds.length) return alert('Select at least one feed for this bundle');
+        bundles.push({ id, name, feedIds: selectedFeedIds, rules: defaultRules() });
       }
 
-      const fetchPromises = sourceUrls.map(async (url) => {
+      saveState();
+      selectItem(type, id);
+    }
+
+    function deleteItem(type, id) {
+      if (type === 'feed') {
+        feeds = feeds.filter(f => f.id !== id);
+        bundles.forEach(b => b.feedIds = b.feedIds.filter(fId => fId !== id));
+      } else {
+        bundles = bundles.filter(b => b.id !== id);
+      }
+      activeSelection = { type: null, id: null };
+      saveState();
+      clearDisplay();
+    }
+
+    function selectItem(type, id) {
+      activeSelection = { type, id };
+      renderSidebar();
+      loadActiveRulesIntoUI();
+      loadCurrentView();
+    }
+
+    function getActiveObject() {
+      if (activeSelection.type === 'feed') return feeds.find(f => f.id === activeSelection.id);
+      if (activeSelection.type === 'bundle') return bundles.find(b => b.id === activeSelection.id);
+      return null;
+    }
+
+    function loadActiveRulesIntoUI() {
+      const obj = getActiveObject();
+      if (!obj) return;
+      document.getElementById('editingTargetLabel').innerText = `${activeSelection.type.toUpperCase()}: ${obj.name}`;
+      
+      const r = obj.rules || defaultRules();
+      document.getElementById('ruleWhitelist').value = r.wl || '';
+      document.getElementById('wlTitle').checked = r.wlTitle;
+      document.getElementById('wlDesc').checked = r.wlDesc;
+      document.getElementById('wlLink').checked = r.wlLink;
+
+      document.getElementById('ruleBlacklist').value = r.bl || '';
+      document.getElementById('blTitle').checked = r.blTitle;
+      document.getElementById('blDesc').checked = r.blDesc;
+      document.getElementById('blLink').checked = r.blLink;
+
+      document.getElementById('hideNoDesc').checked = r.hideNoDesc;
+      document.getElementById('hideNoDates').checked = r.hideNoDates;
+      document.getElementById('hideNoSecure').checked = r.hideNoSecure;
+      document.getElementById('hideDupTitles').checked = r.hideDupTitles;
+      document.getElementById('hideDupDesc').checked = r.hideDupDesc;
+      document.getElementById('hideSimilar').checked = r.hideSimilar;
+      document.getElementById('cleanTitle').checked = r.cleanTitle;
+      document.getElementById('maxAgeHours').value = r.maxAgeHours;
+    }
+
+    function saveActiveRules() {
+      const obj = getActiveObject();
+      if (!obj) return alert('Select a feed or bundle first.');
+
+      obj.rules = {
+        wl: document.getElementById('ruleWhitelist').value,
+        wlTitle: document.getElementById('wlTitle').checked,
+        wlDesc: document.getElementById('wlDesc').checked,
+        wlLink: document.getElementById('wlLink').checked,
+
+        bl: document.getElementById('ruleBlacklist').value,
+        blTitle: document.getElementById('blTitle').checked,
+        blDesc: document.getElementById('blDesc').checked,
+        blLink: document.getElementById('blLink').checked,
+
+        hideNoDesc: document.getElementById('hideNoDesc').checked,
+        hideNoDates: document.getElementById('hideNoDates').checked,
+        hideNoSecure: document.getElementById('hideNoSecure').checked,
+        hideDupTitles: document.getElementById('hideDupTitles').checked,
+        hideDupDesc: document.getElementById('hideDupDesc').checked,
+        hideSimilar: document.getElementById('hideSimilar').checked,
+        cleanTitle: document.getElementById('cleanTitle').checked,
+        maxAgeHours: parseFloat(document.getElementById('maxAgeHours').value) || 0
+      };
+
+      saveState();
+      loadCurrentView();
+    }
+
+    async function fetchRawFeedArticles(query) {
+      const isUrl = query.startsWith('http://') || query.startsWith('https://');
+      const sourceUrls = isUrl ? [query] : [
+        `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-IN&gl=IN&ceid=IN:en`,
+        `https://www.bing.com/news/search?q=${encodeURIComponent(query)}&format=RSS`,
+        `https://news.search.yahoo.com/rss?p=${encodeURIComponent(query)}`
+      ];
+
+      const promises = sourceUrls.map(async (url) => {
         try {
           const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}`);
           const data = await res.json();
           return data.status === 'ok' ? data.items : [];
-        } catch (e) {
-          return [];
-        }
+        } catch (e) { return []; }
       });
 
-      const results = await Promise.all(fetchPromises);
-      fetchedRawArticles = results.flat();
-      applyRulesAndRender();
+      const results = await Promise.all(promises);
+      return results.flat();
     }
 
-    function applyRulesAndRender() {
-      const container = document.getElementById('newsContainer');
-      if (!fetchedRawArticles.length) {
-        container.innerHTML = '<p class="text-slate-400">No articles retrieved from news engines.</p>';
-        return;
-      }
+    function applyFilterRules(items, rules) {
+      if (!rules) return items;
 
-      // Read Rule Inputs
-      const wlKeywords = document.getElementById('ruleWhitelist').value.toLowerCase().split(',').map(s => s.trim()).filter(Boolean);
-      const blKeywords = document.getElementById('ruleBlacklist').value.toLowerCase().split(',').map(s => s.trim()).filter(Boolean);
-      
-      const wlTitle = document.getElementById('wlTitle').checked;
-      const wlDesc = document.getElementById('wlDesc').checked;
-      const wlLink = document.getElementById('wlLink').checked;
-
-      const blTitle = document.getElementById('blTitle').checked;
-      const blDesc = document.getElementById('blDesc').checked;
-      const blLink = document.getElementById('blLink').checked;
-
-      const hideNoDesc = document.getElementById('hideNoDesc').checked;
-      const hideNoDates = document.getElementById('hideNoDates').checked;
-      const hideNoSecure = document.getElementById('hideNoSecure').checked;
-      const hideDupTitles = document.getElementById('hideDupTitles').checked;
-      const hideDupDesc = document.getElementById('hideDupDesc').checked;
-      const hideSimilar = document.getElementById('hideSimilar').checked;
-      const cleanTitleOpt = document.getElementById('cleanTitle').checked;
-      const maxAgeHours = parseFloat(document.getElementById('maxAgeHours').value) || 0;
+      const wlKeywords = (rules.wl || '').toLowerCase().split(',').map(s => s.trim()).filter(Boolean);
+      const blKeywords = (rules.bl || '').toLowerCase().split(',').map(s => s.trim()).filter(Boolean);
 
       const seenTitles = new Set();
       const seenDescriptions = new Set();
       const normalizedTitles = [];
 
-      let filtered = fetchedRawArticles.filter(item => {
+      return items.filter(item => {
         const title = (item.title || '').trim();
         const desc = (item.description || '').replace(/<[^>]*>?/gm, '').trim();
         const link = item.link || '';
         const domain = getDomain(link);
 
-        // Domain Block
         if (blockedDomains.includes(domain)) return false;
 
-        // Auto-Hide Conditions
-        if (hideNoDesc && !desc) return false;
-        if (hideNoDates && (!item.pubDate || isNaN(new Date(item.pubDate).getTime()))) return false;
-        if (hideNoSecure && !link.startsWith('https://')) return false;
+        if (rules.hideNoDesc && !desc) return false;
+        if (rules.hideNoDates && (!item.pubDate || isNaN(new Date(item.pubDate).getTime()))) return false;
+        if (rules.hideNoSecure && !link.startsWith('https://')) return false;
 
-        // Time Cutoff
-        if (maxAgeHours > 0 && item.pubDate) {
+        if (rules.maxAgeHours > 0 && item.pubDate) {
           const ageInHours = (new Date() - new Date(item.pubDate)) / (1000 * 60 * 60);
-          if (ageInHours > maxAgeHours) return false;
+          if (ageInHours > rules.maxAgeHours) return false;
         }
 
-        // Whitelist Filtering
         if (wlKeywords.length > 0) {
           const targets = [];
-          if (wlTitle) targets.push(title.toLowerCase());
-          if (wlDesc) targets.push(desc.toLowerCase());
-          if (wlLink) targets.push(link.toLowerCase());
-          const match = wlKeywords.some(kw => targets.some(t => t.includes(kw)));
-          if (!match) return false;
+          if (rules.wlTitle) targets.push(title.toLowerCase());
+          if (rules.wlDesc) targets.push(desc.toLowerCase());
+          if (rules.wlLink) targets.push(link.toLowerCase());
+          if (!wlKeywords.some(kw => targets.some(t => t.includes(kw)))) return false;
         }
 
-        // Blacklist Filtering
         if (blKeywords.length > 0) {
           const targets = [];
-          if (blTitle) targets.push(title.toLowerCase());
-          if (blDesc) targets.push(desc.toLowerCase());
-          if (blLink) targets.push(link.toLowerCase());
-          const match = blKeywords.some(kw => targets.some(t => t.includes(kw)));
-          if (match) return false;
+          if (rules.blTitle) targets.push(title.toLowerCase());
+          if (rules.blDesc) targets.push(desc.toLowerCase());
+          if (rules.blLink) targets.push(link.toLowerCase());
+          if (blKeywords.some(kw => targets.some(t => t.includes(kw)))) return false;
         }
 
-        // Duplicate Checking
-        if (hideDupTitles) {
+        if (rules.hideDupTitles) {
           if (seenTitles.has(title.toLowerCase())) return false;
           seenTitles.add(title.toLowerCase());
         }
 
-        if (hideDupDesc && desc) {
+        if (rules.hideDupDesc && desc) {
           if (seenDescriptions.has(desc.toLowerCase())) return false;
           seenDescriptions.add(desc.toLowerCase());
         }
 
-        // Hide Similar Titles
-        if (hideSimilar) {
+        if (rules.hideSimilar) {
           const cleanNorm = title.toLowerCase().replace(/[^a-z0-9]/g, '');
           const isSimilar = normalizedTitles.some(prev => {
             const minLen = Math.min(prev.length, cleanNorm.length);
@@ -301,21 +387,55 @@
 
         return true;
       });
+    }
 
-      // Sort by Date
-      filtered.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+    async function loadCurrentView() {
+      const container = document.getElementById('newsContainer');
+      const obj = getActiveObject();
+      if (!obj) return clearDisplay();
 
-      document.getElementById('articleCount').innerText = `${filtered.length} articles`;
+      container.innerHTML = '<p class="text-slate-400">Loading articles from engines...</p>';
 
-      if (!filtered.length) {
-        container.innerHTML = '<p class="text-slate-400">All articles were filtered out by your rules.</p>';
+      let finalArticles = [];
+
+      if (activeSelection.type === 'feed') {
+        document.getElementById('currentTitle').innerText = `📰 ${obj.name}`;
+        document.getElementById('currentMeta').innerText = `Keyword: "${obj.query}" (Google + Bing + Yahoo)`;
+        
+        const raw = await fetchRawFeedArticles(obj.query);
+        finalArticles = applyFilterRules(raw, obj.rules);
+
+      } else if (activeSelection.type === 'bundle') {
+        document.getElementById('currentTitle').innerText = `📦 ${obj.name} [Bundle]`;
+        document.getElementById('currentMeta').innerText = `Bundle includes ${obj.feedIds.length} feed(s). Applying Feed filters then Bundle filters.`;
+
+        const feedPromises = obj.feedIds.map(async (fId) => {
+          const feedObj = feeds.find(f => f.id === fId);
+          if (!feedObj) return [];
+          const raw = await fetchRawFeedArticles(feedObj.query);
+          return applyFilterRules(raw, feedObj.rules); // Layer 1: Feed Rules
+        });
+
+        const nestedArticles = await Promise.all(feedPromises);
+        const mergedFeedArticles = nestedArticles.flat();
+        
+        finalArticles = applyFilterRules(mergedFeedArticles, obj.rules); // Layer 2: Bundle Rules
+      }
+
+      finalArticles.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+      document.getElementById('articleCount').innerText = `${finalArticles.length} articles`;
+
+      if (!finalArticles.length) {
+        container.innerHTML = '<p class="text-slate-400">No articles passed the active filter conditions.</p>';
         return;
       }
 
-      container.innerHTML = filtered.map((item, idx) => {
+      const activeRules = obj.rules || defaultRules();
+
+      container.innerHTML = finalArticles.map(item => {
         let displayTitle = item.title;
-        if (cleanTitleOpt) {
-          displayTitle = displayTitle.replace(/\s*[-|–]\s*[^|-–]+$/, ''); // Strips " - Times of India"
+        if (activeRules.cleanTitle) {
+          displayTitle = displayTitle.replace(/\s*[-|–]\s*[^|-–]+$/, '');
         }
 
         const domain = getDomain(item.link);
@@ -342,50 +462,43 @@
     }
 
     function getDomain(url) {
-      try {
-        return new URL(url).hostname.replace('www.', '');
-      } catch (e) {
-        return 'news-source';
-      }
+      try { return new URL(url).hostname.replace('www.', ''); }
+      catch (e) { return 'news-source'; }
     }
 
     function blockDomain(domain) {
       if (confirm(`Block all future news from ${domain}?`)) {
         blockedDomains.push(domain);
         saveState();
-        applyRulesAndRender();
+        loadCurrentView();
       }
     }
 
     function togglePin(link) {
-      if (pinnedArticles.includes(link)) {
-        pinnedArticles = pinnedArticles.filter(l => l !== link);
-      } else {
-        pinnedArticles.push(link);
-      }
+      if (pinnedArticles.includes(link)) pinnedArticles = pinnedArticles.filter(l => l !== link);
+      else pinnedArticles.push(link);
       saveState();
-      applyRulesAndRender();
+      loadCurrentView();
     }
 
-    function refreshActiveFeed() { loadActiveFeed(); }
     function clearDisplay() {
-      document.getElementById('currentTitle').innerText = 'No Feeds';
+      document.getElementById('currentTitle').innerText = 'Select or Create a Feed/Bundle';
       document.getElementById('newsContainer').innerHTML = '';
       document.getElementById('articleCount').innerText = '0 articles';
     }
 
-    // Cloud Storage via GitHub Gists API
+    // Cloud Persistence via GitHub Gists API
     async function saveToCloud() {
       const token = document.getElementById('githubToken').value.trim();
       let gistId = document.getElementById('gistId').value.trim();
-      if (!token) return alert('Enter a GitHub Personal Access Token to save data.');
+      if (!token) return alert('Enter a GitHub Personal Access Token.');
 
       const payload = {
         description: "MarketFeed Settings & Rules Storage",
         public: false,
         files: {
-          "marketfeed_data.json": {
-            content: JSON.stringify({ feeds, blockedDomains, pinnedArticles }, null, 2)
+          "marketfeed_data_v2.json": {
+            content: JSON.stringify({ feeds, bundles, blockedDomains, pinnedArticles }, null, 2)
           }
         }
       };
@@ -414,19 +527,20 @@
 
       const res = await fetch(`https://api.github.com/gists/${gistId}`);
       const data = await res.json();
-      if (data.files && data.files['marketfeed_data.json']) {
-        const cloudData = JSON.parse(data.files['marketfeed_data.json'].content);
+      if (data.files && data.files['marketfeed_data_v2.json']) {
+        const cloudData = JSON.parse(data.files['marketfeed_data_v2.json'].content);
         feeds = cloudData.feeds || [];
+        bundles = cloudData.bundles || [];
         blockedDomains = cloudData.blockedDomains || [];
         pinnedArticles = cloudData.pinnedArticles || [];
         saveState();
-        if (feeds.length > 0) loadActiveFeed();
+        if (feeds.length > 0) selectItem('feed', feeds[0].id);
         alert('Loaded settings from Cloud!');
       }
     }
 
     renderSidebar();
-    if (feeds.length > 0) loadActiveFeed();
+    if (feeds.length > 0) selectItem('feed', feeds[0].id);
   </script>
 </body>
 </html>
