@@ -3,15 +3,15 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>MarketFeed Engine Pro</title>
+  <title>MarketFeed Engine Pro - All-India Edition</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans">
   <header class="bg-slate-800 border-b border-slate-700 p-4 flex justify-between items-center">
-    <h1 class="text-xl font-bold text-blue-400">⚡ MarketFeed Pro</h1>
+    <h1 class="text-xl font-bold text-blue-400">⚡ MarketFeed Pro (India)</h1>
     <div class="flex gap-2">
       <button onclick="saveToCloud()" class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded text-xs font-semibold">☁️ Cloud Save</button>
-      <button onclick="loadCurrentView()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-xs font-semibold">🔄 Refresh</button>
+      <button onclick="loadCurrentView()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-xs font-semibold">🔄 Refresh Feed</button>
     </div>
   </header>
 
@@ -23,10 +23,10 @@
       <div class="bg-slate-800 p-3 rounded-lg border border-slate-700 space-y-2">
         <h2 class="text-xs font-bold text-green-400 uppercase tracking-wider">+ Create Feed / Bundle</h2>
         <select id="itemType" onchange="toggleFormMode()" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white">
-          <option value="feed">Single Keyword Feed (Multi-Source)</option>
+          <option value="feed">Single Keyword Feed (All Indian Outlets)</option>
           <option value="bundle">Feed Bundle (Group Feeds)</option>
         </select>
-        <input id="itemName" type="text" placeholder="Name (e.g., Infosys or Portfolio)" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white">
+        <input id="itemName" type="text" placeholder="Name (e.g., KPIT, VBL, Sugar)" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white">
         
         <div id="queryContainer">
           <input id="itemQuery" type="text" placeholder="Search Keywords or RSS URL" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white">
@@ -73,11 +73,11 @@
         <div>
           <label class="text-[11px] font-semibold text-slate-300 mb-1 block">Auto-Hide Conditions</label>
           <div class="grid grid-cols-2 gap-1 text-[11px] text-slate-300">
-            <label><input type="checkbox" id="hideNoDesc" checked> No description</label>
-            <label><input type="checkbox" id="hideNoDates" checked> No dates</label>
+            <label><input type="checkbox" id="hideNoDesc"> No description</label>
+            <label><input type="checkbox" id="hideNoDates"> No dates</label>
             <label><input type="checkbox" id="hideNoSecure"> No secure links</label>
             <label><input type="checkbox" id="hideDupTitles" checked> Duplicate titles</label>
-            <label><input type="checkbox" id="hideDupDesc" checked> Duplicate desc</label>
+            <label><input type="checkbox" id="hideDupDesc"> Duplicate desc</label>
             <label><input type="checkbox" id="hideSimilar" checked> Hide similar titles</label>
           </div>
         </div>
@@ -91,7 +91,7 @@
 
           <div class="flex items-center gap-2 text-[11px]">
             <span class="text-slate-300">Auto-hide older than:</span>
-            <input id="maxAgeHours" type="number" value="48" class="w-12 bg-slate-900 border border-slate-700 p-1 rounded text-white text-center">
+            <input id="maxAgeHours" type="number" value="168" class="w-12 bg-slate-900 border border-slate-700 p-1 rounded text-white text-center">
             <span class="text-slate-400">Hours</span>
           </div>
         </div>
@@ -137,26 +137,26 @@
     const defaultRules = () => ({
       wl: '', wlTitle: true, wlDesc: true, wlLink: false,
       bl: '', blTitle: true, blDesc: true, blLink: false,
-      hideNoDesc: true, hideNoDates: true, hideNoSecure: false,
-      hideDupTitles: true, hideDupDesc: true, hideSimilar: true,
-      cleanTitle: true, maxAgeHours: 48
+      hideNoDesc: false, hideNoDates: false, hideNoSecure: false,
+      hideDupTitles: true, hideDupDesc: false, hideSimilar: true,
+      cleanTitle: true, maxAgeHours: 168
     });
 
-    let feeds = JSON.parse(localStorage.getItem('mp_feeds_v2')) || [
+    let feeds = JSON.parse(localStorage.getItem('mp_feeds_v3')) || [
       { id: 'f1', name: 'Infosys', query: 'Infosys', rules: defaultRules() },
-      { id: 'f2', name: 'TCS', query: 'TCS', rules: defaultRules() }
+      { id: 'f2', name: 'KPIT Tech', query: 'KPIT Technologies', rules: defaultRules() }
     ];
-    let bundles = JSON.parse(localStorage.getItem('mp_bundles_v2')) || [
-      { id: 'b1', name: 'IT Portfolio', feedIds: ['f1', 'f2'], rules: defaultRules() }
+    let bundles = JSON.parse(localStorage.getItem('mp_bundles_v3')) || [
+      { id: 'b1', name: 'IT Stocks', feedIds: ['f1', 'f2'], rules: defaultRules() }
     ];
     let blockedDomains = JSON.parse(localStorage.getItem('mp_blocked_domains')) || [];
     let pinnedArticles = JSON.parse(localStorage.getItem('mp_pinned')) || [];
     
-    let activeSelection = { type: 'feed', id: 'f1' }; // type: 'feed' | 'bundle'
+    let activeSelection = { type: 'feed', id: 'f1' };
 
     function saveState() {
-      localStorage.setItem('mp_feeds_v2', JSON.stringify(feeds));
-      localStorage.setItem('mp_bundles_v2', JSON.stringify(bundles));
+      localStorage.setItem('mp_feeds_v3', JSON.stringify(feeds));
+      localStorage.setItem('mp_bundles_v3', JSON.stringify(bundles));
       localStorage.setItem('mp_blocked_domains', JSON.stringify(blockedDomains));
       localStorage.setItem('mp_pinned', JSON.stringify(pinnedArticles));
       renderSidebar();
@@ -302,22 +302,84 @@
       loadCurrentView();
     }
 
+    // Proxy Fetch Engine with Fallbacks for Yahoo, Google, and Indian Media Outlets
+    async function fetchRssViaProxies(url, sourceLabel) {
+      // Proxy 1: Feed2Json
+      try {
+        const res = await fetch(`https://feed2json.org/convert?url=${encodeURIComponent(url)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.items && data.items.length > 0) {
+            return data.items.map(i => ({
+              title: i.title || '',
+              link: i.url || i.external_url || '',
+              description: i.summary || i.content_html || '',
+              pubDate: i.date_published || '',
+              source: sourceLabel
+            }));
+          }
+        }
+      } catch (e) {}
+
+      // Proxy 2: RSS2JSON
+      try {
+        const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}&count=50`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.status === 'ok' && data.items && data.items.length > 0) {
+            return data.items.map(i => ({
+              title: i.title || '',
+              link: i.link || i.guid || '',
+              description: i.description || i.content || '',
+              pubDate: i.pubDate || '',
+              source: sourceLabel
+            }));
+          }
+        }
+      } catch (e) {}
+
+      // Proxy 3: Allorigins CORS Bypass Direct XML Parser
+      try {
+        const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`);
+        if (res.ok) {
+          const xmlText = await res.text();
+          const xmlDoc = new DOMParser().parseFromString(xmlText, "text/xml");
+          const items = Array.from(xmlDoc.querySelectorAll("item"));
+          if (items.length > 0) {
+            return items.map(i => ({
+              title: i.querySelector("title")?.textContent || '',
+              link: i.querySelector("link")?.textContent || i.querySelector("guid")?.textContent || '',
+              description: i.querySelector("description")?.textContent || '',
+              pubDate: i.querySelector("pubDate")?.textContent || '',
+              source: sourceLabel
+            }));
+          }
+        }
+      } catch (e) {}
+
+      return [];
+    }
+
     async function fetchRawFeedArticles(query) {
       const isUrl = query.startsWith('http://') || query.startsWith('https://');
-      const sourceUrls = isUrl ? [query] : [
-        `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-IN&gl=IN&ceid=IN:en`,
-        `https://www.bing.com/news/search?q=${encodeURIComponent(query)}&format=RSS`,
-        `https://news.search.yahoo.com/rss?p=${encodeURIComponent(query)}`
+      
+      if (isUrl) {
+        return await fetchRssViaProxies(query, 'Direct Feed');
+      }
+
+      const encodedQuery = encodeURIComponent(query);
+
+      // Targeted multi-engine endpoints targeting Indian financial platforms
+      const sources = [
+        { name: 'Google News (General)', url: `https://news.google.com/rss/search?q=${encodedQuery}&hl=en-IN&gl=IN&ceid=IN:en` },
+        { name: 'Yahoo News', url: `https://news.search.yahoo.com/rss?p=${encodedQuery}` },
+        { name: 'Bing News', url: `https://www.bing.com/news/search?q=${encodedQuery}&format=RSS` },
+        { name: 'Moneycontrol (Indexed)', url: `https://news.google.com/rss/search?q=${encodedQuery}+site:moneycontrol.com&hl=en-IN&gl=IN&ceid=IN:en` },
+        { name: 'Economic Times (Indexed)', url: `https://news.google.com/rss/search?q=${encodedQuery}+site:economictimes.indiatimes.com&hl=en-IN&gl=IN&ceid=IN:en` },
+        { name: 'Livemint (Indexed)', url: `https://news.google.com/rss/search?q=${encodedQuery}+site:livemint.com&hl=en-IN&gl=IN&ceid=IN:en` }
       ];
 
-      const promises = sourceUrls.map(async (url) => {
-        try {
-          const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}`);
-          const data = await res.json();
-          return data.status === 'ok' ? data.items : [];
-        } catch (e) { return []; }
-      });
-
+      const promises = sources.map(src => fetchRssViaProxies(src.url, src.name));
       const results = await Promise.all(promises);
       return results.flat();
     }
@@ -342,9 +404,9 @@
 
         if (rules.hideNoDesc && !desc) return false;
         if (rules.hideNoDates && (!item.pubDate || isNaN(new Date(item.pubDate).getTime()))) return false;
-        if (rules.hideNoSecure && !link.startsWith('https://')) return false;
+        if (rules.hideNoSecure && link && !link.startsWith('https://')) return false;
 
-        if (rules.maxAgeHours > 0 && item.pubDate) {
+        if (rules.maxAgeHours > 0 && item.pubDate && !isNaN(new Date(item.pubDate).getTime())) {
           const ageInHours = (new Date() - new Date(item.pubDate)) / (1000 * 60 * 60);
           if (ageInHours > rules.maxAgeHours) return false;
         }
@@ -365,7 +427,7 @@
           if (blKeywords.some(kw => targets.some(t => t.includes(kw)))) return false;
         }
 
-        if (rules.hideDupTitles) {
+        if (rules.hideDupTitles && title) {
           if (seenTitles.has(title.toLowerCase())) return false;
           seenTitles.add(title.toLowerCase());
         }
@@ -375,7 +437,7 @@
           seenDescriptions.add(desc.toLowerCase());
         }
 
-        if (rules.hideSimilar) {
+        if (rules.hideSimilar && title) {
           const cleanNorm = title.toLowerCase().replace(/[^a-z0-9]/g, '');
           const isSimilar = normalizedTitles.some(prev => {
             const minLen = Math.min(prev.length, cleanNorm.length);
@@ -394,39 +456,44 @@
       const obj = getActiveObject();
       if (!obj) return clearDisplay();
 
-      container.innerHTML = '<p class="text-slate-400">Loading articles from engines...</p>';
+      container.innerHTML = '<p class="text-slate-400">Fetching articles from Yahoo, Google, Bing, Moneycontrol, ET, and Livemint...</p>';
 
       let finalArticles = [];
 
       if (activeSelection.type === 'feed') {
         document.getElementById('currentTitle').innerText = `📰 ${obj.name}`;
-        document.getElementById('currentMeta').innerText = `Keyword: "${obj.query}" (Google + Bing + Yahoo)`;
+        document.getElementById('currentMeta').innerText = `Keyword: "${obj.query}" (Google + Yahoo + Bing + MC + ET + Mint)`;
         
         const raw = await fetchRawFeedArticles(obj.query);
         finalArticles = applyFilterRules(raw, obj.rules);
 
       } else if (activeSelection.type === 'bundle') {
         document.getElementById('currentTitle').innerText = `📦 ${obj.name} [Bundle]`;
-        document.getElementById('currentMeta').innerText = `Bundle includes ${obj.feedIds.length} feed(s). Applying Feed filters then Bundle filters.`;
+        document.getElementById('currentMeta').innerText = `Bundle includes ${obj.feedIds.length} feed(s).`;
 
         const feedPromises = obj.feedIds.map(async (fId) => {
           const feedObj = feeds.find(f => f.id === fId);
           if (!feedObj) return [];
           const raw = await fetchRawFeedArticles(feedObj.query);
-          return applyFilterRules(raw, feedObj.rules); // Layer 1: Feed Rules
+          return applyFilterRules(raw, feedObj.rules);
         });
 
         const nestedArticles = await Promise.all(feedPromises);
         const mergedFeedArticles = nestedArticles.flat();
         
-        finalArticles = applyFilterRules(mergedFeedArticles, obj.rules); // Layer 2: Bundle Rules
+        finalArticles = applyFilterRules(mergedFeedArticles, obj.rules);
       }
 
-      finalArticles.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+      finalArticles.sort((a, b) => {
+        const dateA = new Date(a.pubDate).getTime() || 0;
+        const dateB = new Date(b.pubDate).getTime() || 0;
+        return dateB - dateA;
+      });
+
       document.getElementById('articleCount').innerText = `${finalArticles.length} articles`;
 
       if (!finalArticles.length) {
-        container.innerHTML = '<p class="text-slate-400">No articles passed the active filter conditions.</p>';
+        container.innerHTML = '<p class="text-slate-400">No articles found matching these filter settings.</p>';
         return;
       }
 
@@ -440,6 +507,7 @@
 
         const domain = getDomain(item.link);
         const isPinned = pinnedArticles.includes(item.link);
+        const formattedDate = item.pubDate && !isNaN(new Date(item.pubDate).getTime()) ? new Date(item.pubDate).toLocaleString() : 'Recent';
 
         return `
           <div class="bg-slate-800 p-4 rounded-lg border ${isPinned ? 'border-yellow-500 bg-slate-800/80' : 'border-slate-700'} hover:border-blue-500 transition">
@@ -449,7 +517,11 @@
               </h3>
               ${isPinned ? '<span class="text-xs text-yellow-400">📌 Pinned</span>' : ''}
             </div>
-            <p class="text-xs text-slate-400 mb-2">${domain} • Published: ${new Date(item.pubDate).toLocaleString()}</p>
+            <p class="text-xs text-slate-400 mb-2">
+              🏷️ Engine: <b class="text-blue-400">${item.source}</b> • 
+              📰 Source: <b class="text-slate-200">${domain}</b> • 
+              Published: ${formattedDate}
+            </p>
             <p class="text-sm text-slate-300 line-clamp-2 mb-3">${(item.description || '').replace(/<[^>]*>?/gm, '')}</p>
             
             <div class="flex gap-2 pt-2 border-t border-slate-700/60 text-xs">
@@ -462,8 +534,12 @@
     }
 
     function getDomain(url) {
-      try { return new URL(url).hostname.replace('www.', ''); }
-      catch (e) { return 'news-source'; }
+      try { 
+        if (!url) return 'news-source';
+        return new URL(url).hostname.replace('www.', ''); 
+      } catch (e) { 
+        return 'news-source'; 
+      }
     }
 
     function blockDomain(domain) {
@@ -487,17 +563,16 @@
       document.getElementById('articleCount').innerText = '0 articles';
     }
 
-    // Cloud Persistence via GitHub Gists API
     async function saveToCloud() {
       const token = document.getElementById('githubToken').value.trim();
       let gistId = document.getElementById('gistId').value.trim();
       if (!token) return alert('Enter a GitHub Personal Access Token.');
 
       const payload = {
-        description: "MarketFeed Settings & Rules Storage",
+        description: "MarketFeed Settings Storage",
         public: false,
         files: {
-          "marketfeed_data_v2.json": {
+          "marketfeed_data_v3.json": {
             content: JSON.stringify({ feeds, bundles, blockedDomains, pinnedArticles }, null, 2)
           }
         }
@@ -517,7 +592,7 @@
         document.getElementById('gistId').value = data.id;
         alert('Configuration saved to cloud gist successfully!');
       } else {
-        alert('Error saving to cloud. Verify token scope.');
+        alert('Error saving to cloud.');
       }
     }
 
@@ -527,8 +602,8 @@
 
       const res = await fetch(`https://api.github.com/gists/${gistId}`);
       const data = await res.json();
-      if (data.files && data.files['marketfeed_data_v2.json']) {
-        const cloudData = JSON.parse(data.files['marketfeed_data_v2.json'].content);
+      if (data.files && data.files['marketfeed_data_v3.json']) {
+        const cloudData = JSON.parse(data.files['marketfeed_data_v3.json'].content);
         feeds = cloudData.feeds || [];
         bundles = cloudData.bundles || [];
         blockedDomains = cloudData.blockedDomains || [];
