@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>MarketFeed Engine Pro - All-India Edition</title>
+  <title>MarketFeed Engine Pro - Indian Markets Edition</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans">
@@ -142,11 +142,11 @@
       cleanTitle: true, maxAgeHours: 168
     });
 
-    let feeds = JSON.parse(localStorage.getItem('mp_feeds_v3')) || [
+    let feeds = JSON.parse(localStorage.getItem('mp_feeds_v4')) || [
       { id: 'f1', name: 'Infosys', query: 'Infosys', rules: defaultRules() },
       { id: 'f2', name: 'KPIT Tech', query: 'KPIT Technologies', rules: defaultRules() }
     ];
-    let bundles = JSON.parse(localStorage.getItem('mp_bundles_v3')) || [
+    let bundles = JSON.parse(localStorage.getItem('mp_bundles_v4')) || [
       { id: 'b1', name: 'IT Stocks', feedIds: ['f1', 'f2'], rules: defaultRules() }
     ];
     let blockedDomains = JSON.parse(localStorage.getItem('mp_blocked_domains')) || [];
@@ -155,8 +155,8 @@
     let activeSelection = { type: 'feed', id: 'f1' };
 
     function saveState() {
-      localStorage.setItem('mp_feeds_v3', JSON.stringify(feeds));
-      localStorage.setItem('mp_bundles_v3', JSON.stringify(bundles));
+      localStorage.setItem('mp_feeds_v4', JSON.stringify(feeds));
+      localStorage.setItem('mp_bundles_v4', JSON.stringify(bundles));
       localStorage.setItem('mp_blocked_domains', JSON.stringify(blockedDomains));
       localStorage.setItem('mp_pinned', JSON.stringify(pinnedArticles));
       renderSidebar();
@@ -302,61 +302,36 @@
       loadCurrentView();
     }
 
-    // Proxy Fetch Engine with Fallbacks for Yahoo, Google, and Indian Media Outlets
-    async function fetchRssViaProxies(url, sourceLabel) {
-      // Proxy 1: Feed2Json
-      try {
-        const res = await fetch(`https://feed2json.org/convert?url=${encodeURIComponent(url)}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.items && data.items.length > 0) {
-            return data.items.map(i => ({
-              title: i.title || '',
-              link: i.url || i.external_url || '',
-              description: i.summary || i.content_html || '',
-              pubDate: i.date_published || '',
-              source: sourceLabel
-            }));
-          }
-        }
-      } catch (e) {}
+    // Direct Browser RSS Parsing Engine using corsproxy.io
+    async function fetchRssDirect(targetUrl, sourceLabel) {
+      const proxyUrls = [
+        `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`,
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`
+      ];
 
-      // Proxy 2: RSS2JSON
-      try {
-        const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}&count=50`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.status === 'ok' && data.items && data.items.length > 0) {
-            return data.items.map(i => ({
-              title: i.title || '',
-              link: i.link || i.guid || '',
-              description: i.description || i.content || '',
-              pubDate: i.pubDate || '',
-              source: sourceLabel
-            }));
-          }
-        }
-      } catch (e) {}
+      for (const proxyUrl of proxyUrls) {
+        try {
+          const res = await fetch(proxyUrl);
+          if (res.ok) {
+            const xmlText = await res.text();
+            const xmlDoc = new DOMParser().parseFromString(xmlText, "text/xml");
+            const items = Array.from(xmlDoc.querySelectorAll("item"));
 
-      // Proxy 3: Allorigins CORS Bypass Direct XML Parser
-      try {
-        const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`);
-        if (res.ok) {
-          const xmlText = await res.text();
-          const xmlDoc = new DOMParser().parseFromString(xmlText, "text/xml");
-          const items = Array.from(xmlDoc.querySelectorAll("item"));
-          if (items.length > 0) {
-            return items.map(i => ({
-              title: i.querySelector("title")?.textContent || '',
-              link: i.querySelector("link")?.textContent || i.querySelector("guid")?.textContent || '',
-              description: i.querySelector("description")?.textContent || '',
-              pubDate: i.querySelector("pubDate")?.textContent || '',
-              source: sourceLabel
-            }));
-          }
-        }
-      } catch (e) {}
+            if (items.length > 0) {
+              return items.map(item => {
+                const title = item.querySelector("title")?.textContent || '';
+                const link = item.querySelector("link")?.textContent || item.querySelector("guid")?.textContent || '';
+                const description = item.querySelector("description")?.textContent || '';
+                const pubDate = item.querySelector("pubDate")?.textContent || '';
 
+                return { title, link, description, pubDate, source: sourceLabel };
+              });
+            }
+          }
+        } catch (e) {
+          console.warn(`Failed fetching ${sourceLabel} via proxy: ${proxyUrl}`, e);
+        }
+      }
       return [];
     }
 
@@ -364,22 +339,21 @@
       const isUrl = query.startsWith('http://') || query.startsWith('https://');
       
       if (isUrl) {
-        return await fetchRssViaProxies(query, 'Direct Feed');
+        return await fetchRssDirect(query, 'Direct Feed');
       }
 
       const encodedQuery = encodeURIComponent(query);
 
-      // Targeted multi-engine endpoints targeting Indian financial platforms
       const sources = [
-        { name: 'Google News (General)', url: `https://news.google.com/rss/search?q=${encodedQuery}&hl=en-IN&gl=IN&ceid=IN:en` },
+        { name: 'Google News', url: `https://news.google.com/rss/search?q=${encodedQuery}&hl=en-IN&gl=IN&ceid=IN:en` },
         { name: 'Yahoo News', url: `https://news.search.yahoo.com/rss?p=${encodedQuery}` },
         { name: 'Bing News', url: `https://www.bing.com/news/search?q=${encodedQuery}&format=RSS` },
-        { name: 'Moneycontrol (Indexed)', url: `https://news.google.com/rss/search?q=${encodedQuery}+site:moneycontrol.com&hl=en-IN&gl=IN&ceid=IN:en` },
-        { name: 'Economic Times (Indexed)', url: `https://news.google.com/rss/search?q=${encodedQuery}+site:economictimes.indiatimes.com&hl=en-IN&gl=IN&ceid=IN:en` },
-        { name: 'Livemint (Indexed)', url: `https://news.google.com/rss/search?q=${encodedQuery}+site:livemint.com&hl=en-IN&gl=IN&ceid=IN:en` }
+        { name: 'Moneycontrol', url: `https://news.google.com/rss/search?q=${encodedQuery}+site:moneycontrol.com&hl=en-IN&gl=IN&ceid=IN:en` },
+        { name: 'Economic Times', url: `https://news.google.com/rss/search?q=${encodedQuery}+site:economictimes.indiatimes.com&hl=en-IN&gl=IN&ceid=IN:en` },
+        { name: 'Livemint', url: `https://news.google.com/rss/search?q=${encodedQuery}+site:livemint.com&hl=en-IN&gl=IN&ceid=IN:en` }
       ];
 
-      const promises = sources.map(src => fetchRssViaProxies(src.url, src.name));
+      const promises = sources.map(src => fetchRssDirect(src.url, src.name));
       const results = await Promise.all(promises);
       return results.flat();
     }
@@ -456,13 +430,13 @@
       const obj = getActiveObject();
       if (!obj) return clearDisplay();
 
-      container.innerHTML = '<p class="text-slate-400">Fetching articles from Yahoo, Google, Bing, Moneycontrol, ET, and Livemint...</p>';
+      container.innerHTML = '<p class="text-slate-400 animate-pulse">Fetching real-time articles across Indian media sources...</p>';
 
       let finalArticles = [];
 
       if (activeSelection.type === 'feed') {
         document.getElementById('currentTitle').innerText = `📰 ${obj.name}`;
-        document.getElementById('currentMeta').innerText = `Keyword: "${obj.query}" (Google + Yahoo + Bing + MC + ET + Mint)`;
+        document.getElementById('currentMeta').innerText = `Keyword: "${obj.query}" (Google + Yahoo + Bing + Moneycontrol + ET + Livemint)`;
         
         const raw = await fetchRawFeedArticles(obj.query);
         finalArticles = applyFilterRules(raw, obj.rules);
@@ -493,7 +467,7 @@
       document.getElementById('articleCount').innerText = `${finalArticles.length} articles`;
 
       if (!finalArticles.length) {
-        container.innerHTML = '<p class="text-slate-400">No articles found matching these filter settings.</p>';
+        container.innerHTML = '<p class="text-slate-400">No articles found matching these keyword and filter criteria.</p>';
         return;
       }
 
@@ -513,13 +487,13 @@
           <div class="bg-slate-800 p-4 rounded-lg border ${isPinned ? 'border-yellow-500 bg-slate-800/80' : 'border-slate-700'} hover:border-blue-500 transition">
             <div class="flex justify-between items-start gap-2 mb-2">
               <h3 class="font-semibold text-base leading-snug">
-                <a href="${item.link}" target="_blank" class="text-blue-300 hover:underline">${displayTitle}</a>
+                <a href="${item.link}" target="_blank" rel="noopener noreferrer" class="text-blue-300 hover:underline">${displayTitle}</a>
               </h3>
               ${isPinned ? '<span class="text-xs text-yellow-400">📌 Pinned</span>' : ''}
             </div>
             <p class="text-xs text-slate-400 mb-2">
               🏷️ Engine: <b class="text-blue-400">${item.source}</b> • 
-              📰 Source: <b class="text-slate-200">${domain}</b> • 
+              📰 Source Domain: <b class="text-slate-200">${domain}</b> • 
               Published: ${formattedDate}
             </p>
             <p class="text-sm text-slate-300 line-clamp-2 mb-3">${(item.description || '').replace(/<[^>]*>?/gm, '')}</p>
@@ -572,7 +546,7 @@
         description: "MarketFeed Settings Storage",
         public: false,
         files: {
-          "marketfeed_data_v3.json": {
+          "marketfeed_data_v4.json": {
             content: JSON.stringify({ feeds, bundles, blockedDomains, pinnedArticles }, null, 2)
           }
         }
@@ -602,8 +576,8 @@
 
       const res = await fetch(`https://api.github.com/gists/${gistId}`);
       const data = await res.json();
-      if (data.files && data.files['marketfeed_data_v3.json']) {
-        const cloudData = JSON.parse(data.files['marketfeed_data_v3.json'].content);
+      if (data.files && data.files['marketfeed_data_v4.json']) {
+        const cloudData = JSON.parse(data.files['marketfeed_data_v4.json'].content);
         feeds = cloudData.feeds || [];
         bundles = cloudData.bundles || [];
         blockedDomains = cloudData.blockedDomains || [];
