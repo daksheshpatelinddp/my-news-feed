@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>MarketFeed Engine Pro - NewsData.io Edition</title>
+  <title>MarketFeed Engine Pro - Hybrid Multi-Search Edition</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans">
   <header class="bg-slate-800 border-b border-slate-700 p-4 flex justify-between items-center">
-    <h1 class="text-xl font-bold text-blue-400">⚡ MarketFeed Pro (India Direct API)</h1>
+    <h1 class="text-xl font-bold text-blue-400">⚡ MarketFeed Pro (NewsData + Google + Yahoo + Bing)</h1>
     <div class="flex gap-2">
       <button onclick="saveToCloud()" class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded text-xs font-semibold">☁️ Cloud Save</button>
       <button onclick="loadCurrentView()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-xs font-semibold">🔄 Refresh Feed</button>
@@ -149,11 +149,11 @@
       cleanTitle: true, maxAgeHours: 168
     });
 
-    let feeds = JSON.parse(localStorage.getItem('mp_feeds_v5')) || [
+    let feeds = JSON.parse(localStorage.getItem('mp_feeds_v6')) || [
       { id: 'f1', name: 'Infosys', query: 'Infosys', rules: defaultRules() },
       { id: 'f2', name: 'KPIT Tech', query: 'KPIT Technologies', rules: defaultRules() }
     ];
-    let bundles = JSON.parse(localStorage.getItem('mp_bundles_v5')) || [
+    let bundles = JSON.parse(localStorage.getItem('mp_bundles_v6')) || [
       { id: 'b1', name: 'IT Stocks', feedIds: ['f1', 'f2'], rules: defaultRules() }
     ];
     let blockedDomains = JSON.parse(localStorage.getItem('mp_blocked_domains')) || [];
@@ -178,8 +178,8 @@
     }
 
     function saveState() {
-      localStorage.setItem('mp_feeds_v5', JSON.stringify(feeds));
-      localStorage.setItem('mp_bundles_v5', JSON.stringify(bundles));
+      localStorage.setItem('mp_feeds_v6', JSON.stringify(feeds));
+      localStorage.setItem('mp_bundles_v6', JSON.stringify(bundles));
       localStorage.setItem('mp_blocked_domains', JSON.stringify(blockedDomains));
       localStorage.setItem('mp_pinned', JSON.stringify(pinnedArticles));
       renderSidebar();
@@ -325,35 +325,62 @@
       loadCurrentView();
     }
 
-    // Direct Native Fetch via NewsData.io API
-    async function fetchFromNewsData(query) {
-      if (!newsDataApiKey) {
-        alert('Please enter your NewsData.io API key in the top left box.');
-        return [];
-      }
-
+    // Dual-Engine Fetcher: NewsData.io API + (Google, Yahoo, Bing RSS)
+    async function fetchCombinedArticles(query) {
       const encodedQuery = encodeURIComponent(query);
-      const endpoint = `https://newsdata.io/api/1/news?apikey=${newsDataApiKey}&q=${encodedQuery}&country=in&language=en`;
+      let allArticles = [];
 
-      try {
-        const res = await fetch(endpoint);
-        const data = await res.json();
-
-        if (data.status === 'success' && data.results) {
-          return data.results.map(item => ({
-            title: item.title || '',
-            link: item.link || '',
-            description: item.description || item.content || '',
-            pubDate: item.pubDate || '',
-            source: item.source_id || 'NewsData.io'
-          }));
-        } else if (data.results && data.results.code) {
-          alert(`NewsData API Error: ${data.results.message}`);
+      // Engine 1: NewsData.io API
+      if (newsDataApiKey) {
+        try {
+          const res = await fetch(`https://newsdata.io/api/1/news?apikey=${newsDataApiKey}&q=${encodedQuery}&country=in&language=en`);
+          const data = await res.json();
+          if (data.status === 'success' && data.results) {
+            const newsDataItems = data.results.map(item => ({
+              title: item.title || '',
+              link: item.link || '',
+              description: item.description || item.content || '',
+              pubDate: item.pubDate || '',
+              source: `NewsData (${item.source_id || 'Media'})`
+            }));
+            allArticles.push(...newsDataItems);
+          }
+        } catch (e) {
+          console.warn("NewsData API error:", e);
         }
-      } catch (err) {
-        console.error("NewsData API Fetch Failed", err);
       }
-      return [];
+
+      // Engine 2: Live Search Engines via RSS Proxy (Google, Yahoo, Bing)
+      const rssSources = [
+        { name: 'Google News', url: `https://news.google.com/rss/search?q=${encodedQuery}&hl=en-IN&gl=IN&ceid=IN:en` },
+        { name: 'Yahoo News', url: `https://news.search.yahoo.com/rss?p=${encodedQuery}` },
+        { name: 'Bing News', url: `https://www.bing.com/news/search?q=${encodedQuery}&format=RSS` }
+      ];
+
+      const rssPromises = rssSources.map(async (src) => {
+        try {
+          const proxyUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(src.url)}`;
+          const res = await fetch(proxyUrl);
+          const data = await res.json();
+          if (data.status === 'ok' && data.items) {
+            return data.items.map(item => ({
+              title: item.title || '',
+              link: item.link || '',
+              description: item.description || '',
+              pubDate: item.pubDate || '',
+              source: src.name
+            }));
+          }
+        } catch (e) {
+          console.warn(`Failed fetching ${src.name}:`, e);
+        }
+        return [];
+      });
+
+      const rssResults = await Promise.all(rssPromises);
+      rssResults.forEach(items => allArticles.push(...items));
+
+      return allArticles;
     }
 
     function applyFilterRules(items, rules) {
@@ -428,15 +455,15 @@
       const obj = getActiveObject();
       if (!obj) return clearDisplay();
 
-      container.innerHTML = '<p class="text-slate-400 animate-pulse">Querying NewsData.io API...</p>';
+      container.innerHTML = '<p class="text-slate-400 animate-pulse">Fetching articles from NewsData.io, Google, Yahoo, and Bing...</p>';
 
       let finalArticles = [];
 
       if (activeSelection.type === 'feed') {
         document.getElementById('currentTitle').innerText = `📰 ${obj.name}`;
-        document.getElementById('currentMeta').innerText = `Keyword: "${obj.query}" (Direct API Coverage)`;
+        document.getElementById('currentMeta').innerText = `Keyword: "${obj.query}" (Hybrid: NewsData + Google + Yahoo + Bing)`;
         
-        const raw = await fetchFromNewsData(obj.query);
+        const raw = await fetchCombinedArticles(obj.query);
         finalArticles = applyFilterRules(raw, obj.rules);
 
       } else if (activeSelection.type === 'bundle') {
@@ -446,7 +473,7 @@
         const feedPromises = obj.feedIds.map(async (fId) => {
           const feedObj = feeds.find(f => f.id === fId);
           if (!feedObj) return [];
-          const raw = await fetchFromNewsData(feedObj.query);
+          const raw = await fetchCombinedArticles(feedObj.query);
           return applyFilterRules(raw, feedObj.rules);
         });
 
@@ -465,7 +492,7 @@
       document.getElementById('articleCount').innerText = `${finalArticles.length} articles`;
 
       if (!finalArticles.length) {
-        container.innerHTML = '<p class="text-slate-400">No articles found matching these criteria or API key is missing.</p>';
+        container.innerHTML = '<p class="text-slate-400">No articles found matching these criteria across all providers.</p>';
         return;
       }
 
@@ -490,7 +517,7 @@
               ${isPinned ? '<span class="text-xs text-yellow-400">📌 Pinned</span>' : ''}
             </div>
             <p class="text-xs text-slate-400 mb-2">
-              🏷️ Source ID: <b class="text-blue-400">${item.source}</b> • 
+              🏷️ Engine/Source: <b class="text-blue-400">${item.source}</b> • 
               📰 Domain: <b class="text-slate-200">${domain}</b> • 
               Published: ${formattedDate}
             </p>
@@ -544,7 +571,7 @@
         description: "MarketFeed Settings Storage",
         public: false,
         files: {
-          "marketfeed_data_v5.json": {
+          "marketfeed_data_v6.json": {
             content: JSON.stringify({ feeds, bundles, blockedDomains, pinnedArticles, newsDataApiKey }, null, 2)
           }
         }
@@ -574,8 +601,8 @@
 
       const res = await fetch(`https://api.github.com/gists/${gistId}`);
       const data = await res.json();
-      if (data.files && data.files['marketfeed_data_v5.json']) {
-        const cloudData = JSON.parse(data.files['marketfeed_data_v5.json'].content);
+      if (data.files && data.files['marketfeed_data_v6.json']) {
+        const cloudData = JSON.parse(data.files['marketfeed_data_v6.json'].content);
         feeds = cloudData.feeds || [];
         bundles = cloudData.bundles || [];
         blockedDomains = cloudData.blockedDomains || [];
