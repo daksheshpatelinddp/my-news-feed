@@ -73,11 +73,11 @@
         <div>
           <label class="text-[11px] font-semibold text-slate-300 mb-1 block">Auto-Hide Conditions</label>
           <div class="grid grid-cols-2 gap-1 text-[11px] text-slate-300">
-            <label><input type="checkbox" id="hideNoDesc" checked> No description</label>
+            <label><input type="checkbox" id="hideNoDesc"> No description</label>
             <label><input type="checkbox" id="hideNoDates" checked> No dates</label>
             <label><input type="checkbox" id="hideNoSecure"> No secure links</label>
             <label><input type="checkbox" id="hideDupTitles" checked> Duplicate titles</label>
-            <label><input type="checkbox" id="hideDupDesc" checked> Duplicate desc</label>
+            <label><input type="checkbox" id="hideDupDesc"> Duplicate desc</label>
             <label><input type="checkbox" id="hideSimilar" checked> Hide similar titles</label>
           </div>
         </div>
@@ -138,7 +138,7 @@
       wl: '', wlTitle: true, wlDesc: true, wlLink: false,
       bl: '', blTitle: true, blDesc: true, blLink: false,
       hideNoDesc: false, hideNoDates: true, hideNoSecure: false,
-      hideDupTitles: true, hideDupDesc: true, hideSimilar: true,
+      hideDupTitles: true, hideDupDesc: false, hideSimilar: true,
       cleanTitle: true, maxAgeHours: 48
     });
 
@@ -302,70 +302,35 @@
       loadCurrentView();
     }
 
-    async function fetchRawXml(url) {
-      // Primary proxy: AllOrigins
+    async function fetchFeedFromRss2Json(url) {
       try {
-        const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
+        const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}&count=50`);
         const data = await res.json();
-        if (data && data.contents) return data.contents;
+        if (data.status === 'ok' && data.items) {
+          return data.items.map(item => ({
+            title: item.title || '',
+            link: item.link || item.guid || '',
+            description: item.description || item.content || '',
+            pubDate: item.pubDate || '',
+            sourceName: item.author || ''
+          }));
+        }
       } catch (e) {}
-
-      // Secondary proxy fallback: CorsProxy.io
-      try {
-        const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`);
-        const xmlText = await res.text();
-        if (xmlText) return xmlText;
-      } catch (e) {}
-
-      return null;
+      return [];
     }
 
     async function fetchRawFeedArticles(query) {
       const isUrl = query.startsWith('http://') || query.startsWith('https://');
+      
+      // Broader query variations to ensure full coverage across Google, Bing, and Yahoo
       const sourceUrls = isUrl ? [query] : [
         `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-IN&gl=IN&ceid=IN:en`,
+        `https://news.google.com/rss/search?q=${encodeURIComponent(query + ' news')}&hl=en-IN&gl=IN&ceid=IN:en`,
         `https://www.bing.com/news/search?q=${encodeURIComponent(query)}&format=RSS`,
         `https://news.search.yahoo.com/rss?p=${encodeURIComponent(query)}`
       ];
 
-      const promises = sourceUrls.map(async (url) => {
-        try {
-          const rawXml = await fetchRawXml(url);
-          if (!rawXml) return [];
-
-          const parser = new DOMParser();
-          const xmlDoc = parser.parseFromString(rawXml, "text/xml");
-          const items = Array.from(xmlDoc.querySelectorAll("item"));
-
-          return items.map(item => {
-            // Raw feed link
-            let rawLink = item.querySelector("link")?.textContent || item.querySelector("guid")?.textContent || '';
-            if (!rawLink && item.querySelector("link")?.nextSibling) {
-              rawLink = item.querySelector("link").nextSibling.nodeValue || '';
-            }
-            rawLink = rawLink.trim();
-
-            const sourceElem = item.querySelector("source");
-            const sourceUrl = sourceElem?.getAttribute("url") || '';
-            const sourceName = sourceElem?.textContent?.trim() || '';
-
-            // Use publisher URL if valid, otherwise fallback safely to RSS item link
-            let finalLink = (sourceUrl && sourceUrl.startsWith('http')) ? sourceUrl : rawLink;
-
-            // Clean descriptions and remove embedded tags
-            let desc = item.querySelector("description")?.textContent || '';
-
-            return {
-              title: item.querySelector("title")?.textContent || '',
-              link: finalLink,
-              sourceName: sourceName,
-              description: desc,
-              pubDate: item.querySelector("pubDate")?.textContent || ''
-            };
-          });
-        } catch (e) { return []; }
-      });
-
+      const promises = sourceUrls.map(url => fetchFeedFromRss2Json(url));
       const results = await Promise.all(promises);
       return results.flat();
     }
@@ -442,7 +407,7 @@
       const obj = getActiveObject();
       if (!obj) return clearDisplay();
 
-      container.innerHTML = '<p class="text-slate-400">Loading articles from engines...</p>';
+      container.innerHTML = '<p class="text-slate-400">Loading articles from Google, Bing, and Yahoo...</p>';
 
       let finalArticles = [];
 
@@ -487,7 +452,6 @@
         }
 
         const domain = getDomain(item.link);
-        const sourceLabel = item.sourceName ? `${item.sourceName} (${domain})` : domain;
         const isPinned = pinnedArticles.includes(item.link);
 
         return `
@@ -498,7 +462,7 @@
               </h3>
               ${isPinned ? '<span class="text-xs text-yellow-400">📌 Pinned</span>' : ''}
             </div>
-            <p class="text-xs text-slate-400 mb-2">📰 Source: <b class="text-slate-200">${sourceLabel}</b> • Published: ${new Date(item.pubDate).toLocaleString()}</p>
+            <p class="text-xs text-slate-400 mb-2">📰 Source: <b class="text-slate-200">${domain}</b> • Published: ${new Date(item.pubDate).toLocaleString()}</p>
             <p class="text-sm text-slate-300 line-clamp-2 mb-3">${(item.description || '').replace(/<[^>]*>?/gm, '')}</p>
             
             <div class="flex gap-2 pt-2 border-t border-slate-700/60 text-xs">
