@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>MarketFeed Engine Pro - Indian Markets Edition</title>
+  <title>MarketFeed Engine Pro - NewsData.io Edition</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans">
   <header class="bg-slate-800 border-b border-slate-700 p-4 flex justify-between items-center">
-    <h1 class="text-xl font-bold text-blue-400">⚡ MarketFeed Pro (India)</h1>
+    <h1 class="text-xl font-bold text-blue-400">⚡ MarketFeed Pro (India Direct API)</h1>
     <div class="flex gap-2">
       <button onclick="saveToCloud()" class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded text-xs font-semibold">☁️ Cloud Save</button>
       <button onclick="loadCurrentView()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-xs font-semibold">🔄 Refresh Feed</button>
@@ -19,17 +19,24 @@
     <!-- Sidebar -->
     <aside class="w-full md:w-1/3 bg-slate-800/50 p-4 border-r border-slate-700 space-y-6">
       
+      <!-- API Key Setup -->
+      <div class="bg-slate-800 p-3 rounded-lg border border-slate-700 space-y-2">
+        <h2 class="text-xs font-bold text-yellow-400 uppercase tracking-wider">🔑 NewsData.io API Key</h2>
+        <input id="newsDataApiKey" type="password" placeholder="Paste pub_... API Key here" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white">
+        <button onclick="saveApiKey()" class="w-full bg-yellow-600 hover:bg-yellow-500 text-slate-900 py-1 rounded text-xs font-bold">Save Key</button>
+      </div>
+
       <!-- Create Feed or Bundle -->
       <div class="bg-slate-800 p-3 rounded-lg border border-slate-700 space-y-2">
         <h2 class="text-xs font-bold text-green-400 uppercase tracking-wider">+ Create Feed / Bundle</h2>
         <select id="itemType" onchange="toggleFormMode()" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white">
-          <option value="feed">Single Keyword Feed (All Indian Outlets)</option>
+          <option value="feed">Single Keyword Feed</option>
           <option value="bundle">Feed Bundle (Group Feeds)</option>
         </select>
         <input id="itemName" type="text" placeholder="Name (e.g., KPIT, VBL, Sugar)" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white">
         
         <div id="queryContainer">
-          <input id="itemQuery" type="text" placeholder="Search Keywords or RSS URL" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white">
+          <input id="itemQuery" type="text" placeholder="Search Keyword (e.g., KPIT Technologies)" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white">
         </div>
 
         <div id="bundleSelectContainer" class="hidden">
@@ -142,21 +149,37 @@
       cleanTitle: true, maxAgeHours: 168
     });
 
-    let feeds = JSON.parse(localStorage.getItem('mp_feeds_v4')) || [
+    let feeds = JSON.parse(localStorage.getItem('mp_feeds_v5')) || [
       { id: 'f1', name: 'Infosys', query: 'Infosys', rules: defaultRules() },
       { id: 'f2', name: 'KPIT Tech', query: 'KPIT Technologies', rules: defaultRules() }
     ];
-    let bundles = JSON.parse(localStorage.getItem('mp_bundles_v4')) || [
+    let bundles = JSON.parse(localStorage.getItem('mp_bundles_v5')) || [
       { id: 'b1', name: 'IT Stocks', feedIds: ['f1', 'f2'], rules: defaultRules() }
     ];
     let blockedDomains = JSON.parse(localStorage.getItem('mp_blocked_domains')) || [];
     let pinnedArticles = JSON.parse(localStorage.getItem('mp_pinned')) || [];
+    let newsDataApiKey = localStorage.getItem('mp_newsdata_key') || '';
     
     let activeSelection = { type: 'feed', id: 'f1' };
 
+    function initApiKeyUI() {
+      if (newsDataApiKey) {
+        document.getElementById('newsDataApiKey').value = newsDataApiKey;
+      }
+    }
+
+    function saveApiKey() {
+      const key = document.getElementById('newsDataApiKey').value.trim();
+      if (!key) return alert('Please enter a valid NewsData.io key');
+      newsDataApiKey = key;
+      localStorage.setItem('mp_newsdata_key', key);
+      alert('API Key Saved!');
+      loadCurrentView();
+    }
+
     function saveState() {
-      localStorage.setItem('mp_feeds_v4', JSON.stringify(feeds));
-      localStorage.setItem('mp_bundles_v4', JSON.stringify(bundles));
+      localStorage.setItem('mp_feeds_v5', JSON.stringify(feeds));
+      localStorage.setItem('mp_bundles_v5', JSON.stringify(bundles));
       localStorage.setItem('mp_blocked_domains', JSON.stringify(blockedDomains));
       localStorage.setItem('mp_pinned', JSON.stringify(pinnedArticles));
       renderSidebar();
@@ -210,7 +233,7 @@
       const id = 'id_' + Date.now();
       if (type === 'feed') {
         const query = document.getElementById('itemQuery').value.trim();
-        if (!query) return alert('Enter search keyword or RSS URL');
+        if (!query) return alert('Enter search keyword');
         feeds.push({ id, name, query, rules: defaultRules() });
       } else {
         const selectedFeedIds = Array.from(document.querySelectorAll('.bundle-feed-check:checked')).map(cb => cb.value);
@@ -302,60 +325,35 @@
       loadCurrentView();
     }
 
-    // Direct Browser RSS Parsing Engine using corsproxy.io
-    async function fetchRssDirect(targetUrl, sourceLabel) {
-      const proxyUrls = [
-        `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`,
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`
-      ];
-
-      for (const proxyUrl of proxyUrls) {
-        try {
-          const res = await fetch(proxyUrl);
-          if (res.ok) {
-            const xmlText = await res.text();
-            const xmlDoc = new DOMParser().parseFromString(xmlText, "text/xml");
-            const items = Array.from(xmlDoc.querySelectorAll("item"));
-
-            if (items.length > 0) {
-              return items.map(item => {
-                const title = item.querySelector("title")?.textContent || '';
-                const link = item.querySelector("link")?.textContent || item.querySelector("guid")?.textContent || '';
-                const description = item.querySelector("description")?.textContent || '';
-                const pubDate = item.querySelector("pubDate")?.textContent || '';
-
-                return { title, link, description, pubDate, source: sourceLabel };
-              });
-            }
-          }
-        } catch (e) {
-          console.warn(`Failed fetching ${sourceLabel} via proxy: ${proxyUrl}`, e);
-        }
-      }
-      return [];
-    }
-
-    async function fetchRawFeedArticles(query) {
-      const isUrl = query.startsWith('http://') || query.startsWith('https://');
-      
-      if (isUrl) {
-        return await fetchRssDirect(query, 'Direct Feed');
+    // Direct Native Fetch via NewsData.io API
+    async function fetchFromNewsData(query) {
+      if (!newsDataApiKey) {
+        alert('Please enter your NewsData.io API key in the top left box.');
+        return [];
       }
 
       const encodedQuery = encodeURIComponent(query);
+      const endpoint = `https://newsdata.io/api/1/news?apikey=${newsDataApiKey}&q=${encodedQuery}&country=in&language=en`;
 
-      const sources = [
-        { name: 'Google News', url: `https://news.google.com/rss/search?q=${encodedQuery}&hl=en-IN&gl=IN&ceid=IN:en` },
-        { name: 'Yahoo News', url: `https://news.search.yahoo.com/rss?p=${encodedQuery}` },
-        { name: 'Bing News', url: `https://www.bing.com/news/search?q=${encodedQuery}&format=RSS` },
-        { name: 'Moneycontrol', url: `https://news.google.com/rss/search?q=${encodedQuery}+site:moneycontrol.com&hl=en-IN&gl=IN&ceid=IN:en` },
-        { name: 'Economic Times', url: `https://news.google.com/rss/search?q=${encodedQuery}+site:economictimes.indiatimes.com&hl=en-IN&gl=IN&ceid=IN:en` },
-        { name: 'Livemint', url: `https://news.google.com/rss/search?q=${encodedQuery}+site:livemint.com&hl=en-IN&gl=IN&ceid=IN:en` }
-      ];
+      try {
+        const res = await fetch(endpoint);
+        const data = await res.json();
 
-      const promises = sources.map(src => fetchRssDirect(src.url, src.name));
-      const results = await Promise.all(promises);
-      return results.flat();
+        if (data.status === 'success' && data.results) {
+          return data.results.map(item => ({
+            title: item.title || '',
+            link: item.link || '',
+            description: item.description || item.content || '',
+            pubDate: item.pubDate || '',
+            source: item.source_id || 'NewsData.io'
+          }));
+        } else if (data.results && data.results.code) {
+          alert(`NewsData API Error: ${data.results.message}`);
+        }
+      } catch (err) {
+        console.error("NewsData API Fetch Failed", err);
+      }
+      return [];
     }
 
     function applyFilterRules(items, rules) {
@@ -430,15 +428,15 @@
       const obj = getActiveObject();
       if (!obj) return clearDisplay();
 
-      container.innerHTML = '<p class="text-slate-400 animate-pulse">Fetching real-time articles across Indian media sources...</p>';
+      container.innerHTML = '<p class="text-slate-400 animate-pulse">Querying NewsData.io API...</p>';
 
       let finalArticles = [];
 
       if (activeSelection.type === 'feed') {
         document.getElementById('currentTitle').innerText = `📰 ${obj.name}`;
-        document.getElementById('currentMeta').innerText = `Keyword: "${obj.query}" (Google + Yahoo + Bing + Moneycontrol + ET + Livemint)`;
+        document.getElementById('currentMeta').innerText = `Keyword: "${obj.query}" (Direct API Coverage)`;
         
-        const raw = await fetchRawFeedArticles(obj.query);
+        const raw = await fetchFromNewsData(obj.query);
         finalArticles = applyFilterRules(raw, obj.rules);
 
       } else if (activeSelection.type === 'bundle') {
@@ -448,7 +446,7 @@
         const feedPromises = obj.feedIds.map(async (fId) => {
           const feedObj = feeds.find(f => f.id === fId);
           if (!feedObj) return [];
-          const raw = await fetchRawFeedArticles(feedObj.query);
+          const raw = await fetchFromNewsData(feedObj.query);
           return applyFilterRules(raw, feedObj.rules);
         });
 
@@ -467,7 +465,7 @@
       document.getElementById('articleCount').innerText = `${finalArticles.length} articles`;
 
       if (!finalArticles.length) {
-        container.innerHTML = '<p class="text-slate-400">No articles found matching these keyword and filter criteria.</p>';
+        container.innerHTML = '<p class="text-slate-400">No articles found matching these criteria or API key is missing.</p>';
         return;
       }
 
@@ -492,8 +490,8 @@
               ${isPinned ? '<span class="text-xs text-yellow-400">📌 Pinned</span>' : ''}
             </div>
             <p class="text-xs text-slate-400 mb-2">
-              🏷️ Engine: <b class="text-blue-400">${item.source}</b> • 
-              📰 Source Domain: <b class="text-slate-200">${domain}</b> • 
+              🏷️ Source ID: <b class="text-blue-400">${item.source}</b> • 
+              📰 Domain: <b class="text-slate-200">${domain}</b> • 
               Published: ${formattedDate}
             </p>
             <p class="text-sm text-slate-300 line-clamp-2 mb-3">${(item.description || '').replace(/<[^>]*>?/gm, '')}</p>
@@ -546,8 +544,8 @@
         description: "MarketFeed Settings Storage",
         public: false,
         files: {
-          "marketfeed_data_v4.json": {
-            content: JSON.stringify({ feeds, bundles, blockedDomains, pinnedArticles }, null, 2)
+          "marketfeed_data_v5.json": {
+            content: JSON.stringify({ feeds, bundles, blockedDomains, pinnedArticles, newsDataApiKey }, null, 2)
           }
         }
       };
@@ -576,18 +574,21 @@
 
       const res = await fetch(`https://api.github.com/gists/${gistId}`);
       const data = await res.json();
-      if (data.files && data.files['marketfeed_data_v4.json']) {
-        const cloudData = JSON.parse(data.files['marketfeed_data_v4.json'].content);
+      if (data.files && data.files['marketfeed_data_v5.json']) {
+        const cloudData = JSON.parse(data.files['marketfeed_data_v5.json'].content);
         feeds = cloudData.feeds || [];
         bundles = cloudData.bundles || [];
         blockedDomains = cloudData.blockedDomains || [];
         pinnedArticles = cloudData.pinnedArticles || [];
+        newsDataApiKey = cloudData.newsDataApiKey || '';
+        initApiKeyUI();
         saveState();
         if (feeds.length > 0) selectItem('feed', feeds[0].id);
         alert('Loaded settings from Cloud!');
       }
     }
 
+    initApiKeyUI();
     renderSidebar();
     if (feeds.length > 0) selectItem('feed', feeds[0].id);
   </script>
