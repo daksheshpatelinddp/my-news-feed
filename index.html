@@ -23,7 +23,7 @@
       <div class="bg-slate-800 p-3 rounded-lg border border-slate-700 space-y-2">
         <h2 class="text-xs font-bold text-green-400 uppercase tracking-wider">+ Create Feed / Bundle</h2>
         <select id="itemType" onchange="toggleFormMode()" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white">
-          <option value="feed">Single Keyword Feed (Multi-Source)</option>
+          <option value="feed">Single Keyword Feed (Multi-Engine)</option>
           <option value="bundle">Feed Bundle (Group Feeds)</option>
         </select>
         <input id="itemName" type="text" placeholder="Name (e.g., Infosys or Portfolio)" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white">
@@ -91,7 +91,7 @@
 
           <div class="flex items-center gap-2 text-[11px]">
             <span class="text-slate-300">Auto-hide older than:</span>
-            <input id="maxAgeHours" type="number" value="48" class="w-12 bg-slate-900 border border-slate-700 p-1 rounded text-white text-center">
+            <input id="maxAgeHours" type="number" value="72" class="w-12 bg-slate-900 border border-slate-700 p-1 rounded text-white text-center">
             <span class="text-slate-400">Hours</span>
           </div>
         </div>
@@ -139,7 +139,7 @@
       bl: '', blTitle: true, blDesc: true, blLink: false,
       hideNoDesc: false, hideNoDates: true, hideNoSecure: false,
       hideDupTitles: true, hideDupDesc: false, hideSimilar: true,
-      cleanTitle: true, maxAgeHours: 48
+      cleanTitle: true, maxAgeHours: 72
     });
 
     let feeds = JSON.parse(localStorage.getItem('mp_feeds_v2')) || [
@@ -302,35 +302,79 @@
       loadCurrentView();
     }
 
-    async function fetchFeedFromRss2Json(url) {
+    // Multi-proxy fetching strategy with sequential fallback for Google/Yahoo/Bing
+    async function fetchSingleRssFeed(url, engineLabel) {
+      // Strategy 1: Feed2Json Service
       try {
-        const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}&count=50`);
-        const data = await res.json();
-        if (data.status === 'ok' && data.items) {
-          return data.items.map(item => ({
-            title: item.title || '',
-            link: item.link || item.guid || '',
-            description: item.description || item.content || '',
-            pubDate: item.pubDate || '',
-            sourceName: item.author || ''
-          }));
+        const res = await fetch(`https://feed2json.org/convert?url=${encodeURIComponent(url)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.items && data.items.length > 0) {
+            return data.items.map(item => ({
+              title: item.title || '',
+              link: item.url || item.external_url || '',
+              description: item.summary || item.content_html || '',
+              pubDate: item.date_published || '',
+              engine: engineLabel
+            }));
+          }
         }
       } catch (e) {}
+
+      // Strategy 2: RSS2JSON API
+      try {
+        const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}&count=50`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.status === 'ok' && data.items && data.items.length > 0) {
+            return data.items.map(item => ({
+              title: item.title || '',
+              link: item.link || item.guid || '',
+              description: item.description || item.content || '',
+              pubDate: item.pubDate || '',
+              engine: engineLabel
+            }));
+          }
+        }
+      } catch (e) {}
+
+      // Strategy 3: Direct XML parsing via CorsProxy
+      try {
+        const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`);
+        if (res.ok) {
+          const xmlText = await res.text();
+          const parser = new DOMParser();
+          const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+          const items = Array.from(xmlDoc.querySelectorAll("item"));
+          if (items.length > 0) {
+            return items.map(item => ({
+              title: item.querySelector("title")?.textContent || '',
+              link: item.querySelector("link")?.textContent || item.querySelector("guid")?.textContent || '',
+              description: item.querySelector("description")?.textContent || '',
+              pubDate: item.querySelector("pubDate")?.textContent || '',
+              engine: engineLabel
+            }));
+          }
+        }
+      } catch (e) {}
+
       return [];
     }
 
     async function fetchRawFeedArticles(query) {
       const isUrl = query.startsWith('http://') || query.startsWith('https://');
       
-      // Broader query variations to ensure full coverage across Google, Bing, and Yahoo
-      const sourceUrls = isUrl ? [query] : [
-        `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-IN&gl=IN&ceid=IN:en`,
-        `https://news.google.com/rss/search?q=${encodeURIComponent(query + ' news')}&hl=en-IN&gl=IN&ceid=IN:en`,
-        `https://www.bing.com/news/search?q=${encodeURIComponent(query)}&format=RSS`,
-        `https://news.search.yahoo.com/rss?p=${encodeURIComponent(query)}`
+      if (isUrl) {
+        return await fetchSingleRssFeed(query, 'Custom RSS');
+      }
+
+      const sources = [
+        { name: 'Google News', url: `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-IN&gl=IN&ceid=IN:en` },
+        { name: 'Yahoo News', url: `https://news.search.yahoo.com/rss?p=${encodeURIComponent(query)}` },
+        { name: 'Bing News', url: `https://www.bing.com/news/search?q=${encodeURIComponent(query)}&format=RSS` }
       ];
 
-      const promises = sourceUrls.map(url => fetchFeedFromRss2Json(url));
+      const promises = sources.map(src => fetchSingleRssFeed(src.url, src.name));
       const results = await Promise.all(promises);
       return results.flat();
     }
@@ -407,7 +451,7 @@
       const obj = getActiveObject();
       if (!obj) return clearDisplay();
 
-      container.innerHTML = '<p class="text-slate-400">Loading articles from Google, Bing, and Yahoo...</p>';
+      container.innerHTML = '<p class="text-slate-400">Fetching articles from Google, Yahoo, and Bing via redundant proxies...</p>';
 
       let finalArticles = [];
 
@@ -462,7 +506,11 @@
               </h3>
               ${isPinned ? '<span class="text-xs text-yellow-400">📌 Pinned</span>' : ''}
             </div>
-            <p class="text-xs text-slate-400 mb-2">📰 Source: <b class="text-slate-200">${domain}</b> • Published: ${new Date(item.pubDate).toLocaleString()}</p>
+            <p class="text-xs text-slate-400 mb-2">
+              🌐 Engine: <b class="text-blue-400">${item.engine || 'RSS'}</b> • 
+              📰 Source Domain: <b class="text-slate-200">${domain}</b> • 
+              Published: ${item.pubDate ? new Date(item.pubDate).toLocaleString() : 'N/A'}
+            </p>
             <p class="text-sm text-slate-300 line-clamp-2 mb-3">${(item.description || '').replace(/<[^>]*>?/gm, '')}</p>
             
             <div class="flex gap-2 pt-2 border-t border-slate-700/60 text-xs">
