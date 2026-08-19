@@ -3,30 +3,74 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Market Feed Dashboard</title>
+  <title>Advanced MarketFeed Engine</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans">
   <header class="bg-slate-800 border-b border-slate-700 p-4 flex justify-between items-center">
-    <h1 class="text-xl font-bold text-blue-400">⚡ MarketFeed Generator</h1>
-    <button onclick="refreshCurrentFeed()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded text-sm font-semibold transition">🔄 Refresh News</button>
+    <h1 class="text-xl font-bold text-blue-400">⚡ MarketFeed Pro</h1>
+    <div class="flex gap-2">
+      <button onclick="saveToCloud()" class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded text-xs font-semibold">☁️ Save to Cloud</button>
+      <button onclick="loadCurrentView()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-xs font-semibold">🔄 Refresh</button>
+    </div>
   </header>
 
   <div class="flex flex-1 flex-col md:flex-row">
-    <aside class="w-full md:w-1/4 bg-slate-800/50 p-4 border-r border-slate-700">
-      <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">+ Create Keyword Feed</h2>
-      <div class="flex gap-2 mb-6">
-        <input id="keywordInput" type="text" placeholder="Enter keyword (e.g. Reliance, TCS)" class="bg-slate-900 border border-slate-700 text-sm rounded px-3 py-2 w-full text-white focus:outline-none focus:border-blue-500">
-        <button onclick="addFeed()" class="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded text-sm font-bold">+</button>
+    <!-- Sidebar -->
+    <aside class="w-full md:w-1/3 bg-slate-800/50 p-4 border-r border-slate-700 space-y-6">
+      
+      <!-- Create Single Feed -->
+      <div>
+        <h2 class="text-xs font-bold text-slate-400 uppercase mb-2">+ Add Feed</h2>
+        <div class="space-y-2">
+          <input id="feedName" type="text" placeholder="Feed Name (e.g., Reliance)" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white">
+          <select id="feedSource" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white">
+            <option value="google">Google News</option>
+            <option value="bing">Bing News</option>
+            <option value="custom">Custom RSS Feed URL</option>
+          </select>
+          <input id="feedQuery" type="text" placeholder="Search Term or RSS URL" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white">
+          <input id="feedInclude" type="text" placeholder="Must include (comma separated)" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white">
+          <input id="feedExclude" type="text" placeholder="Must exclude (comma separated)" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white">
+          <button onclick="addSingleFeed()" class="w-full bg-green-600 hover:bg-green-500 text-white py-1.5 rounded text-xs font-bold">+ Create Feed</button>
+        </div>
       </div>
 
-      <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">My Saved Feeds</h2>
-      <div id="feedList" class="space-y-1"></div>
+      <!-- Create Bundle -->
+      <div>
+        <h2 class="text-xs font-bold text-slate-400 uppercase mb-2">📦 Create Bundle</h2>
+        <div class="space-y-2">
+          <input id="bundleName" type="text" placeholder="Bundle Name (e.g., Tech Stocks)" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white">
+          <input id="bundleInclude" type="text" placeholder="Bundle Include Filter" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white">
+          <input id="bundleExclude" type="text" placeholder="Bundle Exclude Filter" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white">
+          <p class="text-[10px] text-slate-400">Select Feeds to Include:</p>
+          <div id="bundleFeedCheckboxes" class="max-h-24 overflow-y-auto space-y-1 bg-slate-900 p-2 rounded text-xs border border-slate-700"></div>
+          <button onclick="addBundle()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-1.5 rounded text-xs font-bold">📦 Save Bundle</button>
+        </div>
+      </div>
+
+      <!-- Cloud Sync Config -->
+      <div>
+        <h2 class="text-xs font-bold text-slate-400 uppercase mb-2">☁️ Storage Config</h2>
+        <input id="githubToken" type="password" placeholder="GitHub Personal Access Token" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white mb-2">
+        <input id="gistId" type="text" placeholder="Gist ID (optional)" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white mb-2">
+        <button onclick="syncFromCloud()" class="w-full bg-slate-700 hover:bg-slate-600 text-white py-1 rounded text-xs">Load from Cloud</button>
+      </div>
+
+      <!-- Feed & Bundle Lists -->
+      <div>
+        <h2 class="text-xs font-bold text-slate-400 uppercase mb-2">Your Feeds & Bundles</h2>
+        <div id="feedList" class="space-y-1"></div>
+      </div>
     </aside>
 
+    <!-- Main Article View -->
     <main class="flex-1 p-6">
       <div class="flex justify-between items-center mb-6">
-        <h2 id="currentFeedTitle" class="text-2xl font-bold">Select or Add a Feed</h2>
+        <div>
+          <h2 id="currentTitle" class="text-2xl font-bold">Select a Feed or Bundle</h2>
+          <p id="currentMeta" class="text-xs text-slate-400 mt-1"></p>
+        </div>
         <span id="articleCount" class="text-slate-400 text-sm">0 articles</span>
       </div>
       <div id="newsContainer" class="grid grid-cols-1 gap-4"></div>
@@ -34,80 +78,221 @@
   </div>
 
   <script>
-    let feeds = JSON.parse(localStorage.getItem('my_rss_feeds')) || ['Reliance', 'TCS'];
-    let activeFeed = feeds[0] || '';
+    let appData = JSON.parse(localStorage.getItem('marketfeed_data')) || {
+      feeds: [],
+      bundles: []
+    };
+    let activeItem = null; // { type: 'feed'|'bundle', index: number }
 
-    function saveFeeds() { localStorage.setItem('my_rss_feeds', JSON.stringify(feeds)); renderSidebar(); }
+    function saveData() {
+      localStorage.setItem('marketfeed_data', JSON.stringify(appData));
+      renderSidebar();
+    }
 
     function renderSidebar() {
       const list = document.getElementById('feedList');
+      const checkboxes = document.getElementById('bundleFeedCheckboxes');
       list.innerHTML = '';
-      feeds.forEach(feed => {
-        const btn = document.createElement('div');
-        btn.className = `flex justify-between items-center p-2 rounded cursor-pointer ${feed === activeFeed ? 'bg-blue-600 text-white' : 'hover:bg-slate-700 text-slate-300'}`;
-        btn.innerHTML = `<span onclick="selectFeed('${feed}')" class="font-medium">📈 ${feed}</span> <button onclick="deleteFeed('${feed}')" class="text-red-400 text-xs hover:text-red-300 font-bold px-2">✕</button>`;
-        list.appendChild(btn);
+      checkboxes.innerHTML = '';
+
+      // Feeds
+      appData.feeds.forEach((feed, idx) => {
+        const isSelected = activeItem?.type === 'feed' && activeItem?.index === idx;
+        list.innerHTML += `
+          <div class="flex justify-between items-center p-2 rounded cursor-pointer ${isSelected ? 'bg-blue-600' : 'hover:bg-slate-700'}">
+            <span onclick="selectItem('feed', ${idx})" class="font-medium text-xs">📰 ${feed.name} (${feed.source})</span>
+            <button onclick="deleteItem('feed', ${idx})" class="text-red-400 text-xs font-bold px-1">✕</button>
+          </div>`;
+
+        checkboxes.innerHTML += `
+          <label class="flex items-center gap-2">
+            <input type="checkbox" value="${idx}" class="bundle-check">
+            <span>${feed.name}</span>
+          </label>`;
+      });
+
+      // Bundles
+      appData.bundles.forEach((bundle, idx) => {
+        const isSelected = activeItem?.type === 'bundle' && activeItem?.index === idx;
+        list.innerHTML += `
+          <div class="flex justify-between items-center p-2 rounded cursor-pointer ${isSelected ? 'bg-indigo-600' : 'hover:bg-slate-700'} mt-1">
+            <span onclick="selectItem('bundle', ${idx})" class="font-medium text-xs">📦 ${bundle.name} [Bundle]</span>
+            <button onclick="deleteItem('bundle', ${idx})" class="text-red-400 text-xs font-bold px-1">✕</button>
+          </div>`;
       });
     }
 
-    function addFeed() {
-      const input = document.getElementById('keywordInput');
-      const val = input.value.trim().replace(/[$#]/g, '');
-      if (val && !feeds.includes(val)) {
-        feeds.push(val);
-        activeFeed = val;
-        input.value = '';
-        saveFeeds();
-        loadNews(val);
+    function addSingleFeed() {
+      const name = document.getElementById('feedName').value.trim();
+      const source = document.getElementById('feedSource').value;
+      const query = document.getElementById('feedQuery').value.trim();
+      const include = document.getElementById('feedInclude').value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+      const exclude = document.getElementById('feedExclude').value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+
+      if (!name || !query) return alert('Provide feed name and query/URL');
+
+      appData.feeds.push({ name, source, query, include, exclude });
+      saveData();
+      selectItem('feed', appData.feeds.length - 1);
+    }
+
+    function addBundle() {
+      const name = document.getElementById('bundleName').value.trim();
+      const include = document.getElementById('bundleInclude').value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+      const exclude = document.getElementById('bundleExclude').value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+      
+      const selectedFeedIndices = Array.from(document.querySelectorAll('.bundle-check:checked')).map(cb => parseInt(cb.value));
+
+      if (!name || selectedFeedIndices.length === 0) return alert('Provide a name and select at least one feed.');
+
+      appData.bundles.push({ name, feeds: selectedFeedIndices, include, exclude });
+      saveData();
+      selectItem('bundle', appData.bundles.length - 1);
+    }
+
+    function deleteItem(type, idx) {
+      if (type === 'feed') appData.feeds.splice(idx, 1);
+      else appData.bundles.splice(idx, 1);
+      activeItem = null;
+      saveData();
+    }
+
+    function selectItem(type, index) {
+      activeItem = { type, index };
+      renderSidebar();
+      loadCurrentView();
+    }
+
+    function getRssUrl(feed) {
+      if (feed.source === 'google') {
+        return `https://news.google.com/rss/search?q=${encodeURIComponent(feed.query)}&hl=en-IN&gl=IN&ceid=IN:en`;
+      } else if (feed.source === 'bing') {
+        return `https://www.bing.com/news/search?q=${encodeURIComponent(feed.query)}&format=RSS`;
+      } else {
+        return feed.query; // Custom RSS URL
       }
     }
 
-    function deleteFeed(feed) {
-      feeds = feeds.filter(f => f !== feed);
-      if (activeFeed === feed) activeFeed = feeds[0] || '';
-      saveFeeds();
-      if (activeFeed) loadNews(activeFeed); else clearNews();
-    }
-
-    function selectFeed(feed) { activeFeed = feed; renderSidebar(); loadNews(feed); }
-
-    async function loadNews(keyword) {
-      document.getElementById('currentFeedTitle').innerText = `${keyword} News`;
-      const container = document.getElementById('newsContainer');
-      container.innerHTML = '<p class="text-slate-400">Fetching latest articles...</p>';
-      
-      const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(keyword)}&hl=en-IN&gl=IN&ceid=IN:en`;
+    async function fetchFeedArticles(feed) {
+      const rssUrl = getRssUrl(feed);
       const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`;
-
+      
       try {
         const res = await fetch(apiUrl);
         const data = await res.json();
-        if (data.status === 'ok' && data.items.length > 0) {
-          document.getElementById('articleCount').innerText = `${data.items.length} articles`;
-          container.innerHTML = data.items.map(item => `
-            <div class="bg-slate-800 p-4 rounded-lg border border-slate-700 hover:border-blue-500 transition">
-              <h3 class="font-semibold text-lg mb-2"><a href="${item.link}" target="_blank" class="text-blue-300 hover:underline">${item.title}</a></h3>
-              <p class="text-xs text-slate-400 mb-2">Published: ${new Date(item.pubDate).toLocaleString()}</p>
-              <p class="text-sm text-slate-300 line-clamp-2">${item.description.replace(/<[^>]*>?/gm, '')}</p>
-            </div>
-          `).join('');
-        } else {
-          container.innerHTML = '<p class="text-slate-400">No articles found for this keyword.</p>';
-        }
+        if (data.status !== 'ok') return [];
+
+        // Apply Feed-level Filters
+        return data.items.filter(item => {
+          const text = (item.title + ' ' + item.description).toLowerCase();
+          const passInclude = feed.include.length === 0 || feed.include.some(inc => text.includes(inc));
+          const passExclude = feed.exclude.length === 0 || !feed.exclude.some(exc => text.includes(exc));
+          return passInclude && passExclude;
+        });
       } catch (e) {
-        container.innerHTML = '<p class="text-red-400">Failed to fetch news stream. Please try again.</p>';
+        return [];
       }
     }
 
-    function refreshCurrentFeed() { if (activeFeed) loadNews(activeFeed); }
-    function clearNews() {
-      document.getElementById('currentFeedTitle').innerText = 'No Feeds Available';
-      document.getElementById('newsContainer').innerHTML = '';
-      document.getElementById('articleCount').innerText = '0 articles';
+    async function loadCurrentView() {
+      if (!activeItem) return;
+      const container = document.getElementById('newsContainer');
+      container.innerHTML = '<p class="text-slate-400">Loading articles...</p>';
+
+      let rawArticles = [];
+      let globalInclude = [];
+      let globalExclude = [];
+
+      if (activeItem.type === 'feed') {
+        const feed = appData.feeds[activeItem.index];
+        document.getElementById('currentTitle').innerText = feed.name;
+        document.getElementById('currentMeta').innerText = `Source: ${feed.source.toUpperCase()} | Filters: +[${feed.include.join(', ')}] -[${feed.exclude.join(', ')}]`;
+        rawArticles = await fetchFeedArticles(feed);
+      } else {
+        const bundle = appData.bundles[activeItem.index];
+        document.getElementById('currentTitle').innerText = `📦 ${bundle.name}`;
+        document.getElementById('currentMeta').innerText = `Bundle Filters: +[${bundle.include.join(', ')}] -[${bundle.exclude.join(', ')}]`;
+        
+        globalInclude = bundle.include;
+        globalExclude = bundle.exclude;
+
+        // Fetch all feeds in bundle concurrently
+        const promises = bundle.feeds.map(feedIdx => appData.feeds[feedIdx] ? fetchFeedArticles(appData.feeds[feedIdx]) : []);
+        const results = await Promise.all(promises);
+        rawArticles = results.flat();
+      }
+
+      // Apply Bundle-level Filters & Deduplicate
+      let finalArticles = rawArticles.filter(item => {
+        const text = (item.title + ' ' + item.description).toLowerCase();
+        const passInclude = globalInclude.length === 0 || globalInclude.some(inc => text.includes(inc));
+        const passExclude = globalExclude.length === 0 || !globalExclude.some(exc => text.includes(exc));
+        return passInclude && passExclude;
+      });
+
+      // Sort by publication date
+      finalArticles.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+
+      // Render
+      document.getElementById('articleCount').innerText = `${finalArticles.length} articles`;
+      if (finalArticles.length === 0) {
+        container.innerHTML = '<p class="text-slate-400">No articles match your filter conditions.</p>';
+        return;
+      }
+
+      container.innerHTML = finalArticles.map(item => `
+        <div class="bg-slate-800 p-4 rounded-lg border border-slate-700 hover:border-blue-500 transition">
+          <h3 class="font-semibold text-lg mb-2"><a href="${item.link}" target="_blank" class="text-blue-300 hover:underline">${item.title}</a></h3>
+          <p class="text-xs text-slate-400 mb-2">Published: ${new Date(item.pubDate).toLocaleString()}</p>
+          <p class="text-sm text-slate-300 line-clamp-2">${item.description.replace(/<[^>]*>?/gm, '')}</p>
+        </div>
+      `).join('');
+    }
+
+    // Cloud Persistence via GitHub Gists API
+    async function saveToCloud() {
+      const token = document.getElementById('githubToken').value.trim();
+      let gistId = document.getElementById('gistId').value.trim();
+      if (!token) return alert('Please enter a GitHub Personal Access Token to save to GitHub Gist cloud.');
+
+      const payload = {
+        description: "MarketFeed Configuration Storage",
+        public: false,
+        files: { "marketfeed.json": { content: JSON.stringify(appData, null, 2) } }
+      };
+
+      const url = gistId ? `https://api.github.com/gists/${gistId}` : `https://api.github.com/gists`;
+      const method = gistId ? 'PATCH' : 'POST';
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Authorization': `token ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (data.id) {
+        document.getElementById('gistId').value = data.id;
+        alert('Successfully saved configuration to GitHub Gist!');
+      } else {
+        alert('Failed to save to cloud. Check token permissions.');
+      }
+    }
+
+    async function syncFromCloud() {
+      const gistId = document.getElementById('gistId').value.trim();
+      if (!gistId) return alert('Enter a Gist ID to load stored feeds.');
+
+      const res = await fetch(`https://api.github.com/gists/${gistId}`);
+      const data = await res.json();
+      if (data.files && data.files['marketfeed.json']) {
+        appData = JSON.parse(data.files['marketfeed.json'].content);
+        saveData();
+        alert('Cloud feed configuration loaded successfully!');
+      }
     }
 
     renderSidebar();
-    if (activeFeed) loadNews(activeFeed);
   </script>
 </body>
 </html>
