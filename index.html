@@ -3,15 +3,15 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Advanced MarketFeed Engine</title>
+  <title>MarketFeed Engine Pro</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans">
   <header class="bg-slate-800 border-b border-slate-700 p-4 flex justify-between items-center">
     <h1 class="text-xl font-bold text-blue-400">⚡ MarketFeed Pro</h1>
     <div class="flex gap-2">
-      <button onclick="saveToCloud()" class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded text-xs font-semibold">☁️ Save to Cloud</button>
-      <button onclick="loadCurrentView()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-xs font-semibold">🔄 Refresh</button>
+      <button onclick="saveToCloud()" class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded text-xs font-semibold">☁️ Cloud Save</button>
+      <button onclick="refreshActiveFeed()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-xs font-semibold">🔄 Refresh</button>
     </div>
   </header>
 
@@ -19,56 +19,92 @@
     <!-- Sidebar -->
     <aside class="w-full md:w-1/3 bg-slate-800/50 p-4 border-r border-slate-700 space-y-6">
       
-      <!-- Create Single Feed -->
+      <!-- Create Keyword Feed -->
       <div>
-        <h2 class="text-xs font-bold text-slate-400 uppercase mb-2">+ Add Feed</h2>
+        <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">+ Create Unified Keyword Feed</h2>
         <div class="space-y-2">
-          <input id="feedName" type="text" placeholder="Feed Name (e.g., Reliance)" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white">
-          <select id="feedSource" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white">
-            <option value="google">Google News</option>
-            <option value="bing">Bing News</option>
-            <option value="custom">Custom RSS Feed URL</option>
-          </select>
-          <input id="feedQuery" type="text" placeholder="Search Term or RSS URL" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white">
-          <input id="feedInclude" type="text" placeholder="Must include (comma separated)" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white">
-          <input id="feedExclude" type="text" placeholder="Must exclude (comma separated)" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white">
-          <button onclick="addSingleFeed()" class="w-full bg-green-600 hover:bg-green-500 text-white py-1.5 rounded text-xs font-bold">+ Create Feed</button>
+          <input id="feedName" type="text" placeholder="Feed Name (e.g., Infosys)" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white">
+          <input id="feedQuery" type="text" placeholder="Search Keywords or RSS URL" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white">
+          <button onclick="addFeed()" class="w-full bg-green-600 hover:bg-green-500 text-white py-1.5 rounded text-xs font-bold">+ Create Multi-Source Feed</button>
         </div>
       </div>
 
-      <!-- Create Bundle -->
-      <div>
-        <h2 class="text-xs font-bold text-slate-400 uppercase mb-2">📦 Create Bundle</h2>
-        <div class="space-y-2">
-          <input id="bundleName" type="text" placeholder="Bundle Name (e.g., Tech Stocks)" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white">
-          <input id="bundleInclude" type="text" placeholder="Bundle Include Filter" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white">
-          <input id="bundleExclude" type="text" placeholder="Bundle Exclude Filter" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white">
-          <p class="text-[10px] text-slate-400">Select Feeds to Include:</p>
-          <div id="bundleFeedCheckboxes" class="max-h-24 overflow-y-auto space-y-1 bg-slate-900 p-2 rounded text-xs border border-slate-700"></div>
-          <button onclick="addBundle()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-1.5 rounded text-xs font-bold">📦 Save Bundle</button>
+      <!-- Advanced Filter Rules (RSS.app Replica) -->
+      <div class="bg-slate-800 p-3 rounded-lg border border-slate-700 space-y-3">
+        <h2 class="text-xs font-bold text-blue-400 uppercase tracking-wider">⚙️ Advanced Rules (RSS.app)</h2>
+        
+        <!-- Whitelist -->
+        <div>
+          <label class="text-[11px] font-semibold text-slate-300">Whitelist Keywords (Comma separated)</label>
+          <input id="ruleWhitelist" type="text" placeholder="Must contain..." class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-1.5 text-white mt-1">
+          <div class="flex gap-3 mt-1 text-[10px] text-slate-400">
+            <label><input type="checkbox" id="wlTitle" checked> Title</label>
+            <label><input type="checkbox" id="wlDesc" checked> Description</label>
+            <label><input type="checkbox" id="wlLink"> Link</label>
+          </div>
         </div>
+
+        <!-- Blacklist -->
+        <div>
+          <label class="text-[11px] font-semibold text-slate-300">Blacklist Keywords (Comma separated)</label>
+          <input id="ruleBlacklist" type="text" placeholder="Hide if contains..." class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-1.5 text-white mt-1">
+          <div class="flex gap-3 mt-1 text-[10px] text-slate-400">
+            <label><input type="checkbox" id="blTitle" checked> Title</label>
+            <label><input type="checkbox" id="blDesc" checked> Description</label>
+            <label><input type="checkbox" id="blLink"> Link</label>
+          </div>
+        </div>
+
+        <!-- Auto-Hide Conditions -->
+        <div>
+          <label class="text-[11px] font-semibold text-slate-300 mb-1 block">Auto-Hide Conditions</label>
+          <div class="grid grid-cols-2 gap-1 text-[11px] text-slate-300">
+            <label><input type="checkbox" id="hideNoDesc" checked> No description</label>
+            <label><input type="checkbox" id="hideNoDates" checked> No dates</label>
+            <label><input type="checkbox" id="hideNoSecure"> No secure links</label>
+            <label><input type="checkbox" id="hideDupTitles" checked> Duplicate titles</label>
+            <label><input type="checkbox" id="hideDupDesc" checked> Duplicate desc</label>
+            <label><input type="checkbox" id="hideSimilar" checked> Hide similar titles</label>
+          </div>
+        </div>
+
+        <!-- Title Cleaning & Time Filter -->
+        <div class="space-y-2 pt-2 border-t border-slate-700">
+          <label class="flex items-center gap-2 text-[11px] text-slate-300">
+            <input type="checkbox" id="cleanTitle" checked>
+            <span><b>Clean Title</b> (Remove publisher suffix)</span>
+          </label>
+
+          <div class="flex items-center gap-2 text-[11px]">
+            <span class="text-slate-300">Auto-hide older than:</span>
+            <input id="maxAgeHours" type="number" value="48" class="w-12 bg-slate-900 border border-slate-700 p-1 rounded text-white text-center">
+            <span class="text-slate-400">Hours</span>
+          </div>
+        </div>
+
+        <button onclick="applyRulesAndRender()" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-1 rounded text-xs font-bold">Apply Filter Rules</button>
       </div>
 
-      <!-- Cloud Sync Config -->
+      <!-- Cloud Config -->
       <div>
-        <h2 class="text-xs font-bold text-slate-400 uppercase mb-2">☁️ Storage Config</h2>
-        <input id="githubToken" type="password" placeholder="GitHub Personal Access Token" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white mb-2">
-        <input id="gistId" type="text" placeholder="Gist ID (optional)" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-2 text-white mb-2">
-        <button onclick="syncFromCloud()" class="w-full bg-slate-700 hover:bg-slate-600 text-white py-1 rounded text-xs">Load from Cloud</button>
+        <h2 class="text-xs font-bold text-slate-400 uppercase mb-1">☁️ Cloud Sync (GitHub Gist)</h2>
+        <input id="githubToken" type="password" placeholder="GitHub Token" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-1.5 text-white mb-1">
+        <input id="gistId" type="text" placeholder="Gist ID" class="w-full bg-slate-900 border border-slate-700 text-xs rounded p-1.5 text-white mb-2">
+        <button onclick="syncFromCloud()" class="w-full bg-slate-700 hover:bg-slate-600 text-white py-1 rounded text-xs">Load Cloud Config</button>
       </div>
 
-      <!-- Feed & Bundle Lists -->
+      <!-- Feed List -->
       <div>
-        <h2 class="text-xs font-bold text-slate-400 uppercase mb-2">Your Feeds & Bundles</h2>
+        <h2 class="text-xs font-bold text-slate-400 uppercase mb-2">My Saved Feeds</h2>
         <div id="feedList" class="space-y-1"></div>
       </div>
     </aside>
 
-    <!-- Main Article View -->
+    <!-- Main View -->
     <main class="flex-1 p-6">
       <div class="flex justify-between items-center mb-6">
         <div>
-          <h2 id="currentTitle" class="text-2xl font-bold">Select a Feed or Bundle</h2>
+          <h2 id="currentTitle" class="text-2xl font-bold">Select or Add a Feed</h2>
           <p id="currentMeta" class="text-xs text-slate-400 mt-1"></p>
         </div>
         <span id="articleCount" class="text-slate-400 text-sm">0 articles</span>
@@ -78,187 +114,280 @@
   </div>
 
   <script>
-    let appData = JSON.parse(localStorage.getItem('marketfeed_data')) || {
-      feeds: [],
-      bundles: []
-    };
-    let activeItem = null; // { type: 'feed'|'bundle', index: number }
+    let feeds = JSON.parse(localStorage.getItem('mp_feeds')) || [
+      { name: 'Infosys', query: 'Infosys' },
+      { name: 'Reliance', query: 'Reliance' }
+    ];
+    let blockedDomains = JSON.parse(localStorage.getItem('mp_blocked_domains')) || [];
+    let pinnedArticles = JSON.parse(localStorage.getItem('mp_pinned')) || [];
+    let activeFeedIdx = 0;
+    let fetchedRawArticles = [];
 
-    function saveData() {
-      localStorage.setItem('marketfeed_data', JSON.stringify(appData));
+    function saveState() {
+      localStorage.setItem('mp_feeds', JSON.stringify(feeds));
+      localStorage.setItem('mp_blocked_domains', JSON.stringify(blockedDomains));
+      localStorage.setItem('mp_pinned', JSON.stringify(pinnedArticles));
       renderSidebar();
     }
 
     function renderSidebar() {
       const list = document.getElementById('feedList');
-      const checkboxes = document.getElementById('bundleFeedCheckboxes');
       list.innerHTML = '';
-      checkboxes.innerHTML = '';
-
-      // Feeds
-      appData.feeds.forEach((feed, idx) => {
-        const isSelected = activeItem?.type === 'feed' && activeItem?.index === idx;
+      feeds.forEach((feed, idx) => {
+        const isSelected = activeFeedIdx === idx;
         list.innerHTML += `
           <div class="flex justify-between items-center p-2 rounded cursor-pointer ${isSelected ? 'bg-blue-600' : 'hover:bg-slate-700'}">
-            <span onclick="selectItem('feed', ${idx})" class="font-medium text-xs">📰 ${feed.name} (${feed.source})</span>
-            <button onclick="deleteItem('feed', ${idx})" class="text-red-400 text-xs font-bold px-1">✕</button>
-          </div>`;
-
-        checkboxes.innerHTML += `
-          <label class="flex items-center gap-2">
-            <input type="checkbox" value="${idx}" class="bundle-check">
-            <span>${feed.name}</span>
-          </label>`;
-      });
-
-      // Bundles
-      appData.bundles.forEach((bundle, idx) => {
-        const isSelected = activeItem?.type === 'bundle' && activeItem?.index === idx;
-        list.innerHTML += `
-          <div class="flex justify-between items-center p-2 rounded cursor-pointer ${isSelected ? 'bg-indigo-600' : 'hover:bg-slate-700'} mt-1">
-            <span onclick="selectItem('bundle', ${idx})" class="font-medium text-xs">📦 ${bundle.name} [Bundle]</span>
-            <button onclick="deleteItem('bundle', ${idx})" class="text-red-400 text-xs font-bold px-1">✕</button>
+            <span onclick="selectFeed(${idx})" class="font-medium text-xs">📰 ${feed.name}</span>
+            <button onclick="deleteFeed(${idx})" class="text-red-400 text-xs font-bold px-1">✕</button>
           </div>`;
       });
     }
 
-    function addSingleFeed() {
+    function addFeed() {
       const name = document.getElementById('feedName').value.trim();
-      const source = document.getElementById('feedSource').value;
       const query = document.getElementById('feedQuery').value.trim();
-      const include = document.getElementById('feedInclude').value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
-      const exclude = document.getElementById('feedExclude').value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
-
-      if (!name || !query) return alert('Provide feed name and query/URL');
-
-      appData.feeds.push({ name, source, query, include, exclude });
-      saveData();
-      selectItem('feed', appData.feeds.length - 1);
-    }
-
-    function addBundle() {
-      const name = document.getElementById('bundleName').value.trim();
-      const include = document.getElementById('bundleInclude').value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
-      const exclude = document.getElementById('bundleExclude').value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+      if (!name || !query) return alert('Enter a Feed Name and Search Keyword');
       
-      const selectedFeedIndices = Array.from(document.querySelectorAll('.bundle-check:checked')).map(cb => parseInt(cb.value));
-
-      if (!name || selectedFeedIndices.length === 0) return alert('Provide a name and select at least one feed.');
-
-      appData.bundles.push({ name, feeds: selectedFeedIndices, include, exclude });
-      saveData();
-      selectItem('bundle', appData.bundles.length - 1);
+      feeds.push({ name, query });
+      saveState();
+      selectFeed(feeds.length - 1);
     }
 
-    function deleteItem(type, idx) {
-      if (type === 'feed') appData.feeds.splice(idx, 1);
-      else appData.bundles.splice(idx, 1);
-      activeItem = null;
-      saveData();
+    function deleteFeed(idx) {
+      feeds.splice(idx, 1);
+      if (activeFeedIdx >= feeds.length) activeFeedIdx = Math.max(0, feeds.length - 1);
+      saveState();
+      if (feeds.length > 0) loadActiveFeed(); else clearDisplay();
     }
 
-    function selectItem(type, index) {
-      activeItem = { type, index };
+    function selectFeed(idx) {
+      activeFeedIdx = idx;
       renderSidebar();
-      loadCurrentView();
+      loadActiveFeed();
     }
 
-    function getRssUrl(feed) {
-      if (feed.source === 'google') {
-        return `https://news.google.com/rss/search?q=${encodeURIComponent(feed.query)}&hl=en-IN&gl=IN&ceid=IN:en`;
-      } else if (feed.source === 'bing') {
-        return `https://www.bing.com/news/search?q=${encodeURIComponent(feed.query)}&format=RSS`;
-      } else {
-        return feed.query; // Custom RSS URL
-      }
-    }
-
-    async function fetchFeedArticles(feed) {
-      const rssUrl = getRssUrl(feed);
-      const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`;
+    // Auto-fetches from Google News, Bing News, and Yahoo News concurrently
+    async function loadActiveFeed() {
+      if (!feeds[activeFeedIdx]) return;
+      const feed = feeds[activeFeedIdx];
+      document.getElementById('currentTitle').innerText = `${feed.name} Stream`;
+      document.getElementById('currentMeta').innerText = `Aggregating: Google News + Bing News + Yahoo News for "${feed.query}"`;
       
-      try {
-        const res = await fetch(apiUrl);
-        const data = await res.json();
-        if (data.status !== 'ok') return [];
-
-        // Apply Feed-level Filters
-        return data.items.filter(item => {
-          const text = (item.title + ' ' + item.description).toLowerCase();
-          const passInclude = feed.include.length === 0 || feed.include.some(inc => text.includes(inc));
-          const passExclude = feed.exclude.length === 0 || !feed.exclude.some(exc => text.includes(exc));
-          return passInclude && passExclude;
-        });
-      } catch (e) {
-        return [];
-      }
-    }
-
-    async function loadCurrentView() {
-      if (!activeItem) return;
       const container = document.getElementById('newsContainer');
-      container.innerHTML = '<p class="text-slate-400">Loading articles...</p>';
+      container.innerHTML = '<p class="text-slate-400">Fetching unified news stream from all sources...</p>';
 
-      let rawArticles = [];
-      let globalInclude = [];
-      let globalExclude = [];
-
-      if (activeItem.type === 'feed') {
-        const feed = appData.feeds[activeItem.index];
-        document.getElementById('currentTitle').innerText = feed.name;
-        document.getElementById('currentMeta').innerText = `Source: ${feed.source.toUpperCase()} | Filters: +[${feed.include.join(', ')}] -[${feed.exclude.join(', ')}]`;
-        rawArticles = await fetchFeedArticles(feed);
+      const isUrl = feed.query.startsWith('http://') || feed.query.startsWith('https://');
+      
+      let sourceUrls = [];
+      if (isUrl) {
+        sourceUrls = [feed.query];
       } else {
-        const bundle = appData.bundles[activeItem.index];
-        document.getElementById('currentTitle').innerText = `📦 ${bundle.name}`;
-        document.getElementById('currentMeta').innerText = `Bundle Filters: +[${bundle.include.join(', ')}] -[${bundle.exclude.join(', ')}]`;
-        
-        globalInclude = bundle.include;
-        globalExclude = bundle.exclude;
-
-        // Fetch all feeds in bundle concurrently
-        const promises = bundle.feeds.map(feedIdx => appData.feeds[feedIdx] ? fetchFeedArticles(appData.feeds[feedIdx]) : []);
-        const results = await Promise.all(promises);
-        rawArticles = results.flat();
+        const q = encodeURIComponent(feed.query);
+        sourceUrls = [
+          `https://news.google.com/rss/search?q=${q}&hl=en-IN&gl=IN&ceid=IN:en`,
+          `https://www.bing.com/news/search?q=${q}&format=RSS`,
+          `https://news.search.yahoo.com/rss?p=${q}`
+        ];
       }
 
-      // Apply Bundle-level Filters & Deduplicate
-      let finalArticles = rawArticles.filter(item => {
-        const text = (item.title + ' ' + item.description).toLowerCase();
-        const passInclude = globalInclude.length === 0 || globalInclude.some(inc => text.includes(inc));
-        const passExclude = globalExclude.length === 0 || !globalExclude.some(exc => text.includes(exc));
-        return passInclude && passExclude;
+      const fetchPromises = sourceUrls.map(async (url) => {
+        try {
+          const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}`);
+          const data = await res.json();
+          return data.status === 'ok' ? data.items : [];
+        } catch (e) {
+          return [];
+        }
       });
 
-      // Sort by publication date
-      finalArticles.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+      const results = await Promise.all(fetchPromises);
+      fetchedRawArticles = results.flat();
+      applyRulesAndRender();
+    }
 
-      // Render
-      document.getElementById('articleCount').innerText = `${finalArticles.length} articles`;
-      if (finalArticles.length === 0) {
-        container.innerHTML = '<p class="text-slate-400">No articles match your filter conditions.</p>';
+    function applyRulesAndRender() {
+      const container = document.getElementById('newsContainer');
+      if (!fetchedRawArticles.length) {
+        container.innerHTML = '<p class="text-slate-400">No articles retrieved from news engines.</p>';
         return;
       }
 
-      container.innerHTML = finalArticles.map(item => `
-        <div class="bg-slate-800 p-4 rounded-lg border border-slate-700 hover:border-blue-500 transition">
-          <h3 class="font-semibold text-lg mb-2"><a href="${item.link}" target="_blank" class="text-blue-300 hover:underline">${item.title}</a></h3>
-          <p class="text-xs text-slate-400 mb-2">Published: ${new Date(item.pubDate).toLocaleString()}</p>
-          <p class="text-sm text-slate-300 line-clamp-2">${item.description.replace(/<[^>]*>?/gm, '')}</p>
-        </div>
-      `).join('');
+      // Read Rule Inputs
+      const wlKeywords = document.getElementById('ruleWhitelist').value.toLowerCase().split(',').map(s => s.trim()).filter(Boolean);
+      const blKeywords = document.getElementById('ruleBlacklist').value.toLowerCase().split(',').map(s => s.trim()).filter(Boolean);
+      
+      const wlTitle = document.getElementById('wlTitle').checked;
+      const wlDesc = document.getElementById('wlDesc').checked;
+      const wlLink = document.getElementById('wlLink').checked;
+
+      const blTitle = document.getElementById('blTitle').checked;
+      const blDesc = document.getElementById('blDesc').checked;
+      const blLink = document.getElementById('blLink').checked;
+
+      const hideNoDesc = document.getElementById('hideNoDesc').checked;
+      const hideNoDates = document.getElementById('hideNoDates').checked;
+      const hideNoSecure = document.getElementById('hideNoSecure').checked;
+      const hideDupTitles = document.getElementById('hideDupTitles').checked;
+      const hideDupDesc = document.getElementById('hideDupDesc').checked;
+      const hideSimilar = document.getElementById('hideSimilar').checked;
+      const cleanTitleOpt = document.getElementById('cleanTitle').checked;
+      const maxAgeHours = parseFloat(document.getElementById('maxAgeHours').value) || 0;
+
+      const seenTitles = new Set();
+      const seenDescriptions = new Set();
+      const normalizedTitles = [];
+
+      let filtered = fetchedRawArticles.filter(item => {
+        const title = (item.title || '').trim();
+        const desc = (item.description || '').replace(/<[^>]*>?/gm, '').trim();
+        const link = item.link || '';
+        const domain = getDomain(link);
+
+        // Domain Block
+        if (blockedDomains.includes(domain)) return false;
+
+        // Auto-Hide Conditions
+        if (hideNoDesc && !desc) return false;
+        if (hideNoDates && (!item.pubDate || isNaN(new Date(item.pubDate).getTime()))) return false;
+        if (hideNoSecure && !link.startsWith('https://')) return false;
+
+        // Time Cutoff
+        if (maxAgeHours > 0 && item.pubDate) {
+          const ageInHours = (new Date() - new Date(item.pubDate)) / (1000 * 60 * 60);
+          if (ageInHours > maxAgeHours) return false;
+        }
+
+        // Whitelist Filtering
+        if (wlKeywords.length > 0) {
+          const targets = [];
+          if (wlTitle) targets.push(title.toLowerCase());
+          if (wlDesc) targets.push(desc.toLowerCase());
+          if (wlLink) targets.push(link.toLowerCase());
+          const match = wlKeywords.some(kw => targets.some(t => t.includes(kw)));
+          if (!match) return false;
+        }
+
+        // Blacklist Filtering
+        if (blKeywords.length > 0) {
+          const targets = [];
+          if (blTitle) targets.push(title.toLowerCase());
+          if (blDesc) targets.push(desc.toLowerCase());
+          if (blLink) targets.push(link.toLowerCase());
+          const match = blKeywords.some(kw => targets.some(t => t.includes(kw)));
+          if (match) return false;
+        }
+
+        // Duplicate Checking
+        if (hideDupTitles) {
+          if (seenTitles.has(title.toLowerCase())) return false;
+          seenTitles.add(title.toLowerCase());
+        }
+
+        if (hideDupDesc && desc) {
+          if (seenDescriptions.has(desc.toLowerCase())) return false;
+          seenDescriptions.add(desc.toLowerCase());
+        }
+
+        // Hide Similar Titles
+        if (hideSimilar) {
+          const cleanNorm = title.toLowerCase().replace(/[^a-z0-9]/g, '');
+          const isSimilar = normalizedTitles.some(prev => {
+            const minLen = Math.min(prev.length, cleanNorm.length);
+            return minLen > 15 && (prev.includes(cleanNorm.slice(0, 20)) || cleanNorm.includes(prev.slice(0, 20)));
+          });
+          if (isSimilar) return false;
+          normalizedTitles.push(cleanNorm);
+        }
+
+        return true;
+      });
+
+      // Sort by Date
+      filtered.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+
+      document.getElementById('articleCount').innerText = `${filtered.length} articles`;
+
+      if (!filtered.length) {
+        container.innerHTML = '<p class="text-slate-400">All articles were filtered out by your rules.</p>';
+        return;
+      }
+
+      container.innerHTML = filtered.map((item, idx) => {
+        let displayTitle = item.title;
+        if (cleanTitleOpt) {
+          displayTitle = displayTitle.replace(/\s*[-|–]\s*[^|-–]+$/, ''); // Strips " - Times of India"
+        }
+
+        const domain = getDomain(item.link);
+        const isPinned = pinnedArticles.includes(item.link);
+
+        return `
+          <div class="bg-slate-800 p-4 rounded-lg border ${isPinned ? 'border-yellow-500 bg-slate-800/80' : 'border-slate-700'} hover:border-blue-500 transition">
+            <div class="flex justify-between items-start gap-2 mb-2">
+              <h3 class="font-semibold text-base leading-snug">
+                <a href="${item.link}" target="_blank" class="text-blue-300 hover:underline">${displayTitle}</a>
+              </h3>
+              ${isPinned ? '<span class="text-xs text-yellow-400">📌 Pinned</span>' : ''}
+            </div>
+            <p class="text-xs text-slate-400 mb-2">${domain} • Published: ${new Date(item.pubDate).toLocaleString()}</p>
+            <p class="text-sm text-slate-300 line-clamp-2 mb-3">${(item.description || '').replace(/<[^>]*>?/gm, '')}</p>
+            
+            <div class="flex gap-2 pt-2 border-t border-slate-700/60 text-xs">
+              <button onclick="blockDomain('${domain}')" class="bg-slate-700 hover:bg-red-900/40 text-red-300 px-2 py-1 rounded">🚫 Block ${domain}</button>
+              <button onclick="togglePin('${item.link}')" class="bg-slate-700 hover:bg-yellow-900/40 text-yellow-300 px-2 py-1 rounded">${isPinned ? 'Unpin' : '📌 Pin Post'}</button>
+            </div>
+          </div>
+        `;
+      }).join('');
     }
 
-    // Cloud Persistence via GitHub Gists API
+    function getDomain(url) {
+      try {
+        return new URL(url).hostname.replace('www.', '');
+      } catch (e) {
+        return 'news-source';
+      }
+    }
+
+    function blockDomain(domain) {
+      if (confirm(`Block all future news from ${domain}?`)) {
+        blockedDomains.push(domain);
+        saveState();
+        applyRulesAndRender();
+      }
+    }
+
+    function togglePin(link) {
+      if (pinnedArticles.includes(link)) {
+        pinnedArticles = pinnedArticles.filter(l => l !== link);
+      } else {
+        pinnedArticles.push(link);
+      }
+      saveState();
+      applyRulesAndRender();
+    }
+
+    function refreshActiveFeed() { loadActiveFeed(); }
+    function clearDisplay() {
+      document.getElementById('currentTitle').innerText = 'No Feeds';
+      document.getElementById('newsContainer').innerHTML = '';
+      document.getElementById('articleCount').innerText = '0 articles';
+    }
+
+    // Cloud Storage via GitHub Gists API
     async function saveToCloud() {
       const token = document.getElementById('githubToken').value.trim();
       let gistId = document.getElementById('gistId').value.trim();
-      if (!token) return alert('Please enter a GitHub Personal Access Token to save to GitHub Gist cloud.');
+      if (!token) return alert('Enter a GitHub Personal Access Token to save data.');
 
       const payload = {
-        description: "MarketFeed Configuration Storage",
+        description: "MarketFeed Settings & Rules Storage",
         public: false,
-        files: { "marketfeed.json": { content: JSON.stringify(appData, null, 2) } }
+        files: {
+          "marketfeed_data.json": {
+            content: JSON.stringify({ feeds, blockedDomains, pinnedArticles }, null, 2)
+          }
+        }
       };
 
       const url = gistId ? `https://api.github.com/gists/${gistId}` : `https://api.github.com/gists`;
@@ -273,26 +402,31 @@
       const data = await res.json();
       if (data.id) {
         document.getElementById('gistId').value = data.id;
-        alert('Successfully saved configuration to GitHub Gist!');
+        alert('Configuration saved to cloud gist successfully!');
       } else {
-        alert('Failed to save to cloud. Check token permissions.');
+        alert('Error saving to cloud. Verify token scope.');
       }
     }
 
     async function syncFromCloud() {
       const gistId = document.getElementById('gistId').value.trim();
-      if (!gistId) return alert('Enter a Gist ID to load stored feeds.');
+      if (!gistId) return alert('Enter a valid Gist ID.');
 
       const res = await fetch(`https://api.github.com/gists/${gistId}`);
       const data = await res.json();
-      if (data.files && data.files['marketfeed.json']) {
-        appData = JSON.parse(data.files['marketfeed.json'].content);
-        saveData();
-        alert('Cloud feed configuration loaded successfully!');
+      if (data.files && data.files['marketfeed_data.json']) {
+        const cloudData = JSON.parse(data.files['marketfeed_data.json'].content);
+        feeds = cloudData.feeds || [];
+        blockedDomains = cloudData.blockedDomains || [];
+        pinnedArticles = cloudData.pinnedArticles || [];
+        saveState();
+        if (feeds.length > 0) loadActiveFeed();
+        alert('Loaded settings from Cloud!');
       }
     }
 
     renderSidebar();
+    if (feeds.length > 0) loadActiveFeed();
   </script>
 </body>
 </html>
