@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>MarketFeed Engine Pro - Hybrid Multi-Search Edition</title>
+  <title>MarketFeed Engine Pro - Editable Bundles Edition</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans">
   <header class="bg-slate-800 border-b border-slate-700 p-4 flex justify-between items-center">
-    <h1 class="text-xl font-bold text-blue-400">⚡ MarketFeed Pro (NewsData + Google + Yahoo + Bing)</h1>
+    <h1 class="text-xl font-bold text-blue-400">⚡ MarketFeed Pro (Hybrid API)</h1>
     <div class="flex gap-2">
       <button onclick="saveToCloud()" class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded text-xs font-semibold">☁️ Cloud Save</button>
       <button onclick="loadCurrentView()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-xs font-semibold">🔄 Refresh Feed</button>
@@ -45,6 +45,17 @@
         </div>
 
         <button onclick="createItem()" class="w-full bg-green-600 hover:bg-green-500 text-white py-1.5 rounded text-xs font-bold">Save Feed / Bundle</button>
+      </div>
+
+      <!-- Edit Existing Bundle Editor -->
+      <div id="bundleEditorContainer" class="hidden bg-slate-800 p-3 rounded-lg border border-purple-500 space-y-2">
+        <div class="flex justify-between items-center">
+          <h2 class="text-xs font-bold text-purple-400 uppercase tracking-wider">✏️ Manage Bundle Feeds</h2>
+          <span id="editingBundleName" class="text-[10px] text-slate-300 font-bold"></span>
+        </div>
+        <p class="text-[10px] text-slate-400">Check or uncheck feeds to update this bundle:</p>
+        <div id="editBundleCheckboxes" class="max-h-28 overflow-y-auto space-y-1 bg-slate-900 p-2 rounded text-xs border border-slate-700"></div>
+        <button onclick="saveBundleEdit()" class="w-full bg-purple-600 hover:bg-purple-500 text-white py-1 rounded text-xs font-bold">Update Bundle Feeds</button>
       </div>
 
       <!-- Advanced Filter Rules Editor -->
@@ -149,11 +160,11 @@
       cleanTitle: true, maxAgeHours: 168
     });
 
-    let feeds = JSON.parse(localStorage.getItem('mp_feeds_v6')) || [
+    let feeds = JSON.parse(localStorage.getItem('mp_feeds_v7')) || [
       { id: 'f1', name: 'Infosys', query: 'Infosys', rules: defaultRules() },
       { id: 'f2', name: 'KPIT Tech', query: 'KPIT Technologies', rules: defaultRules() }
     ];
-    let bundles = JSON.parse(localStorage.getItem('mp_bundles_v6')) || [
+    let bundles = JSON.parse(localStorage.getItem('mp_bundles_v7')) || [
       { id: 'b1', name: 'IT Stocks', feedIds: ['f1', 'f2'], rules: defaultRules() }
     ];
     let blockedDomains = JSON.parse(localStorage.getItem('mp_blocked_domains')) || [];
@@ -178,8 +189,8 @@
     }
 
     function saveState() {
-      localStorage.setItem('mp_feeds_v6', JSON.stringify(feeds));
-      localStorage.setItem('mp_bundles_v6', JSON.stringify(bundles));
+      localStorage.setItem('mp_feeds_v7', JSON.stringify(feeds));
+      localStorage.setItem('mp_bundles_v7', JSON.stringify(bundles));
       localStorage.setItem('mp_blocked_domains', JSON.stringify(blockedDomains));
       localStorage.setItem('mp_pinned', JSON.stringify(pinnedArticles));
       renderSidebar();
@@ -223,6 +234,56 @@
             <button onclick="deleteItem('bundle', '${b.id}')" class="text-red-400 text-xs font-bold px-1">✕</button>
           </div>`;
       });
+
+      renderBundleEditor();
+    }
+
+    function renderBundleEditor() {
+      const container = document.getElementById('bundleEditorContainer');
+      const checkboxArea = document.getElementById('editBundleCheckboxes');
+      const nameLabel = document.getElementById('editingBundleName');
+
+      if (activeSelection.type !== 'bundle') {
+        container.classList.add('hidden');
+        return;
+      }
+
+      const activeBundle = bundles.find(b => b.id === activeSelection.id);
+      if (!activeBundle) {
+        container.classList.add('hidden');
+        return;
+      }
+
+      container.classList.remove('hidden');
+      nameLabel.innerText = activeBundle.name;
+      checkboxArea.innerHTML = '';
+
+      feeds.forEach(f => {
+        const isChecked = activeBundle.feedIds.includes(f.id);
+        checkboxArea.innerHTML += `
+          <label class="flex items-center gap-2">
+            <input type="checkbox" value="${f.id}" class="edit-bundle-feed-check" ${isChecked ? 'checked' : ''}>
+            <span>${f.name}</span>
+          </label>`;
+      });
+    }
+
+    function saveBundleEdit() {
+      if (activeSelection.type !== 'bundle') return;
+
+      const activeBundle = bundles.find(b => b.id === activeSelection.id);
+      if (!activeBundle) return;
+
+      const selectedFeedIds = Array.from(document.querySelectorAll('.edit-bundle-feed-check:checked')).map(cb => cb.value);
+
+      if (!selectedFeedIds.length) {
+        return alert('A bundle must have at least one feed selected.');
+      }
+
+      activeBundle.feedIds = selectedFeedIds;
+      saveState();
+      loadCurrentView();
+      alert(`Updated "${activeBundle.name}" with ${selectedFeedIds.length} feed(s)!`);
     }
 
     function createItem() {
@@ -325,12 +386,10 @@
       loadCurrentView();
     }
 
-    // Dual-Engine Fetcher: NewsData.io API + (Google, Yahoo, Bing RSS)
     async function fetchCombinedArticles(query) {
       const encodedQuery = encodeURIComponent(query);
       let allArticles = [];
 
-      // Engine 1: NewsData.io API
       if (newsDataApiKey) {
         try {
           const res = await fetch(`https://newsdata.io/api/1/news?apikey=${newsDataApiKey}&q=${encodedQuery}&country=in&language=en`);
@@ -350,7 +409,6 @@
         }
       }
 
-      // Engine 2: Live Search Engines via RSS Proxy (Google, Yahoo, Bing)
       const rssSources = [
         { name: 'Google News', url: `https://news.google.com/rss/search?q=${encodedQuery}&hl=en-IN&gl=IN&ceid=IN:en` },
         { name: 'Yahoo News', url: `https://news.search.yahoo.com/rss?p=${encodedQuery}` },
@@ -455,13 +513,13 @@
       const obj = getActiveObject();
       if (!obj) return clearDisplay();
 
-      container.innerHTML = '<p class="text-slate-400 animate-pulse">Fetching articles from NewsData.io, Google, Yahoo, and Bing...</p>';
+      container.innerHTML = '<p class="text-slate-400 animate-pulse">Fetching articles...</p>';
 
       let finalArticles = [];
 
       if (activeSelection.type === 'feed') {
         document.getElementById('currentTitle').innerText = `📰 ${obj.name}`;
-        document.getElementById('currentMeta').innerText = `Keyword: "${obj.query}" (Hybrid: NewsData + Google + Yahoo + Bing)`;
+        document.getElementById('currentMeta').innerText = `Keyword: "${obj.query}"`;
         
         const raw = await fetchCombinedArticles(obj.query);
         finalArticles = applyFilterRules(raw, obj.rules);
@@ -492,7 +550,7 @@
       document.getElementById('articleCount').innerText = `${finalArticles.length} articles`;
 
       if (!finalArticles.length) {
-        container.innerHTML = '<p class="text-slate-400">No articles found matching these criteria across all providers.</p>';
+        container.innerHTML = '<p class="text-slate-400">No articles found matching these criteria.</p>';
         return;
       }
 
@@ -571,7 +629,7 @@
         description: "MarketFeed Settings Storage",
         public: false,
         files: {
-          "marketfeed_data_v6.json": {
+          "marketfeed_data_v7.json": {
             content: JSON.stringify({ feeds, bundles, blockedDomains, pinnedArticles, newsDataApiKey }, null, 2)
           }
         }
@@ -601,8 +659,8 @@
 
       const res = await fetch(`https://api.github.com/gists/${gistId}`);
       const data = await res.json();
-      if (data.files && data.files['marketfeed_data_v6.json']) {
-        const cloudData = JSON.parse(data.files['marketfeed_data_v6.json'].content);
+      if (data.files && data.files['marketfeed_data_v7.json']) {
+        const cloudData = JSON.parse(data.files['marketfeed_data_v7.json'].content);
         feeds = cloudData.feeds || [];
         bundles = cloudData.bundles || [];
         blockedDomains = cloudData.blockedDomains || [];
